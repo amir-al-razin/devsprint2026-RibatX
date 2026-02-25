@@ -27,11 +27,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build shared packages
+      - name: Type-check all packages
         run: pnpm turbo build --filter="./packages/*"
 
-      - name: Run unit tests (Gateway)
-        run: pnpm turbo test --filter=@ribatx/gateway
+      - name: Lint all services
+        run: pnpm turbo lint
+        continue-on-error: true  # Don't block on lint warnings initially
 
-      - name: Run unit tests (Stock)
-        run: pnpm turbo test --filter=@ribatx/stock
+      - name: Build all services
+        run: pnpm turbo build
+
+      - name: Run all tests
+        run: pnpm turbo test
