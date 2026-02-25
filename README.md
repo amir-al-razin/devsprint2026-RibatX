@@ -7,16 +7,16 @@ Turborepo monorepo · 5 NestJS microservices · TanStack Start frontend · Postg
 
 ## Stack
 
-| Layer | Tech |
-|---|---|
-| Frontend | TanStack Start + ShadCN (port 4000) |
-| Gateway | NestJS (port 3000) |
-| Identity | NestJS — JWT auth (port 3001) |
-| Stock | NestJS — inventory (port 3002) |
-| Kitchen | NestJS — BullMQ queue (port 3003) |
-| Notification | NestJS — Socket.io (port 3004) |
-| Database | PostgreSQL 15 — 5 logical DBs |
-| Cache / Queue | Redis |
+| Layer         | Tech                                |
+| ------------- | ----------------------------------- |
+| Frontend      | TanStack Start + ShadCN (port 4000) |
+| Gateway       | NestJS (port 3000)                  |
+| Identity      | NestJS — JWT auth (port 3001)       |
+| Stock         | NestJS — inventory (port 3002)      |
+| Kitchen       | NestJS — BullMQ queue (port 3003)   |
+| Notification  | NestJS — Socket.io (port 3004)      |
+| Database      | PostgreSQL 15 — 5 logical DBs       |
+| Cache / Queue | Redis                               |
 
 ---
 
@@ -52,10 +52,12 @@ pnpm turbo dev
 ```
 
 > **Note — iptables error on first Docker run:**  
-> If you see `iptables: Chain 'DOCKER-ISOLATION-STAGE-2' does not exist`, run:  
+> If you see `iptables: Chain 'DOCKER-ISOLATION-STAGE-2' does not exist`, run:
+>
 > ```bash
 > sudo iptables -N DOCKER-ISOLATION-STAGE-2 && sudo iptables -N DOCKER-ISOLATION-STAGE-1
 > ```
+>
 > Then retry `docker compose up`. This is a one-time fix per reboot on some Linux setups.
 
 ---
@@ -90,6 +92,10 @@ We use a `main → dev → feat/<name>/<feature>` branch strategy.
 git config --global user.name "Your Name"
 git config --global user.email "your@email.com"
 
+# Husky git hooks are installed automatically when you run pnpm install.
+# pre-commit: auto-formats staged files with Prettier
+# pre-push:   runs the full test suite — push is blocked if any test fails
+
 # Start a new feature
 git checkout dev
 git pull origin dev
@@ -103,6 +109,7 @@ git push origin dev
 ```
 
 Rules:
+
 - **Never commit directly to `main` or `dev`**
 - All work goes through feature branches
 - `main` is updated only at demo-ready milestones
