@@ -31,7 +31,7 @@ jobs:
         run: pnpm turbo build --filter="./packages/*"
 
       - name: Run unit tests (Gateway)
-        run: pnpm turbo test --filter=gateway
+        run: pnpm turbo test --filter=@ribatx/gateway
 
       - name: Run unit tests (Stock)
-        run: pnpm turbo test --filter=stock
+        run: pnpm turbo test --filter=@ribatx/stock
