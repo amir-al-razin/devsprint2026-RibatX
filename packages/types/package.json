@@ -1,0 +1,19 @@
+{
+  "name": "@ribatx/types",
+  "version": "0.0.1",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "lint": "echo 'No lint configured for types'"
+  },
+  "devDependencies": {
+    "@ribatx/tsconfig": "workspace:*",
+    "typescript": "^5.4.0"
+  },
+  "dependencies": {
+    "zod": "^3.23.0"
+  }
+}

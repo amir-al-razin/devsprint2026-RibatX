@@ -1,0 +1,159 @@
+name: ribatx-cafeteria
+
+services:
+  # ── Infrastructure ────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: ribatx_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:alpine
+    container_name: ribatx_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ── Backend Services ──────────────────────────────────────────────────────
+  identity:
+    build:
+      context: .
+      dockerfile: apps/identity/Dockerfile
+    container_name: ribatx_identity
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/identity_db
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:4000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  gateway:
+    build:
+      context: .
+      dockerfile: apps/gateway/Dockerfile
+    container_name: ribatx_gateway
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/order_db
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      STOCK_SERVICE_URL: http://stock:3002
+      KITCHEN_SERVICE_URL: http://kitchen:3003
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:4000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  stock:
+    build:
+      context: .
+      dockerfile: apps/stock/Dockerfile
+    container_name: ribatx_stock
+    restart: unless-stopped
+    # Not exposed externally — only reachable within the Docker network
+    expose:
+      - "3002"
+    environment:
+      NODE_ENV: production
+      PORT: 3002
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/stock_db
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  kitchen:
+    build:
+      context: .
+      dockerfile: apps/kitchen/Dockerfile
+    container_name: ribatx_kitchen
+    restart: unless-stopped
+    expose:
+      - "3003"
+    environment:
+      NODE_ENV: production
+      PORT: 3003
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/kitchen_db
+      REDIS_URL: redis://redis:6379
+      NOTIFICATION_SERVICE_URL: http://notification:3004
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  notification:
+    build:
+      context: .
+      dockerfile: apps/notification/Dockerfile
+    container_name: ribatx_notification
+    restart: unless-stopped
+    ports:
+      - "3004:3004"
+    environment:
+      NODE_ENV: production
+      PORT: 3004
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/notify_db
+      REDIS_URL: redis://redis:6379
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:4000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ── Frontend ──────────────────────────────────────────────────────────────
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: ribatx_web
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      VITE_GATEWAY_URL: http://gateway:3000
+      VITE_NOTIFICATION_URL: http://notification:3004
+    depends_on:
+      - gateway
+      - notification
+
+volumes:
+  postgres_data:
