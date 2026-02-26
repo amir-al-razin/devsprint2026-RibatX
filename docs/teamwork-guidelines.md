@@ -170,7 +170,61 @@ If you must change one: do it in an isolated PR, tag everyone, and merge only af
 
 ---
 
-## 9. Communication Rules
+## 9. Testing Strategy
+
+**Libraries:** Jest + `@nestjs/testing` + `supertest` for all NestJS services. Vitest for `apps/web`. Both are already installed — no setup needed.
+
+### Rule: test your own service, mock everything else
+
+Unit tests must never touch a real database, Redis, or HTTP endpoint. Use Jest mocks to replace dependencies:
+
+```ts
+// Example: apps/identity/src/auth/auth.service.spec.ts
+const mockPrisma = { student: { findUnique: jest.fn(), create: jest.fn() } };
+const mockRedis = { incr: jest.fn(), expire: jest.fn() };
+const mockJwt = { sign: jest.fn().mockReturnValue("token") };
+
+const module = await Test.createTestingModule({
+  providers: [
+    AuthService,
+    { provide: PrismaService, useValue: mockPrisma },
+    { provide: JwtService, useValue: mockJwt },
+    { provide: "REDIS_CLIENT", useValue: mockRedis },
+  ],
+}).compile();
+```
+
+### What to test per service (minimum required)
+
+| Service        | Required spec file                          | Must cover                                                                                               |
+| -------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `identity`     | `auth/auth.service.spec.ts`                 | login happy path, wrong password → 401, 4th attempt → 429                                                |
+| `gateway`      | `orders/orders.service.spec.ts`             | no token → 401, cache hit stock=0 → 409, duplicate idempotency key → cached response                     |
+| `stock`        | `stock/stock.service.spec.ts`               | successful reserve decrements qty+version, version conflict after 3 retries → 409, qty=0 → immediate 409 |
+| `kitchen`      | `kitchen/kitchen.processor.spec.ts`         | job processes and calls Notification Hub, job failure retries                                            |
+| `notification` | `notification/notification.service.spec.ts` | socket emits to correct room, PATCH /notify triggers broadcast                                           |
+
+### How to run tests while building
+
+```bash
+# Only your service, re-runs on save
+cd apps/identity
+pnpm test:watch
+
+# Only your service, single run
+pnpm turbo test --filter=@ribatx/identity
+
+# All services (Husky runs this automatically on git push)
+pnpm turbo test
+```
+
+### When to write the test
+
+Write the test **in the same PR as the feature** — not after, not in a cleanup PR. If a spec file doesn't exist for your feature, CI will still pass, but the PR reviewer should reject it.
+
+---
+
+## 10. Communication Rules
 
 - **Blocking on someone?** Ping directly, don't wait more than 2 hours silently.
 - **Changing a shared contract?** Always announce _before_ committing, not after.
@@ -179,7 +233,7 @@ If you must change one: do it in an isolated PR, tag everyone, and merge only af
 
 ---
 
-## 10. The Non-Negotiables
+## 11. The Non-Negotiables
 
 These are the rules that protect the demo. Breaking any of these breaks the submission:
 
