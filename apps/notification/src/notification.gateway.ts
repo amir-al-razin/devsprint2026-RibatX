@@ -4,6 +4,8 @@ import {
   SubscribeMessage,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  MessageBody,
+  ConnectedSocket,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
@@ -13,7 +15,9 @@ import { Logger } from '@nestjs/common';
     origin: '*',
   },
 })
-export class NotificationGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class NotificationGateway
+  implements OnGatewayConnection, OnGatewayDisconnect
+{
   @WebSocketServer()
   server: Server;
 
@@ -27,19 +31,27 @@ export class NotificationGateway implements OnGatewayConnection, OnGatewayDiscon
     this.logger.log(`Client disconnected: ${client.id}`);
   }
 
-  @SubscribeMessage('subscribeToOrder')
-  handleOrderSubscription(client: Socket, orderId: string) {
-    client.join(`order:${orderId}`);
-    this.logger.log(`Client ${client.id} subscribed to order ${orderId}`);
-    return { status: 'SUBSCRIBED', orderId };
+  // Client emits { studentId } → server joins room student:{studentId}
+  @SubscribeMessage('join')
+  handleJoin(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { studentId: string },
+  ) {
+    const room = `student:${data.studentId}`;
+    client.join(room);
+    this.logger.log(`Client ${client.id} joined room ${room}`);
+    return { status: 'JOINED', room };
   }
 
-  sendUpdate(orderId: string, status: string) {
-    this.server.to(`order:${orderId}`).emit('orderStatusUpdate', {
+  sendUpdate(studentId: string, orderId: string, status: string) {
+    const room = `student:${studentId}`;
+    this.server.to(room).emit('order:status', {
       orderId,
       status,
       timestamp: new Date().toISOString(),
     });
-    this.logger.log(`Sent update for order ${orderId}: ${status}`);
+    this.logger.log(
+      `Sent status "${status}" for order ${orderId} to room ${room}`,
+    );
   }
 }
