@@ -11,21 +11,38 @@ export class OrdersProcessor extends WorkerHost {
     const { orderId, studentId, itemId } = job.data;
     this.logger.log(`Processing order ${orderId} for student ${studentId}...`);
 
-    // Mock cooking time (3-7 seconds as per requirements)
+    const notificationUrl =
+      process.env.NOTIFICATION_SERVICE_URL || 'http://notification:3004';
+
+    // Step 1: notify IN_KITCHEN immediately
+    try {
+      await axios.patch(`${notificationUrl}/notify/${orderId}`, {
+        status: 'IN_KITCHEN',
+        studentId,
+      });
+      this.logger.log(`Order ${orderId} marked IN_KITCHEN`);
+    } catch (error) {
+      this.logger.error(
+        `Failed to send IN_KITCHEN notification for order ${orderId}`,
+      );
+    }
+
+    // Step 2: simulate cooking time (3–7 seconds)
     const cookingTime = Math.floor(Math.random() * 4000) + 3000;
     await new Promise((resolve) => setTimeout(resolve, cookingTime));
 
     this.logger.log(`Order ${orderId} is READY!`);
 
-    // Notify the Notification Service (Mocking the internal call)
+    // Step 3: notify READY
     try {
-      const notificationUrl = process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:3004';
-      await axios.post(`${notificationUrl}/notifications/status`, {
-        orderId,
+      await axios.patch(`${notificationUrl}/notify/${orderId}`, {
         status: 'READY',
+        studentId,
       });
     } catch (error) {
-      this.logger.error(`Failed to notify notification service for order ${orderId}`);
+      this.logger.error(
+        `Failed to send READY notification for order ${orderId}`,
+      );
     }
 
     return { status: 'COMPLETED', orderId };
