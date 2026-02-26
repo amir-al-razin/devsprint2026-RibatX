@@ -1,4 +1,8 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
@@ -48,13 +52,20 @@ export class StockService {
 
         // Cache write-back
         await this.redis.set(`stock:${itemId}`, item.quantity - 1);
-        
+
         return {
           reserved: true,
           remaining: item.quantity - 1,
           itemId,
         };
       } catch (error) {
+        // Re-throw intentional HTTP exceptions — don't count them as retryable
+        if (
+          error instanceof ConflictException ||
+          error instanceof NotFoundException
+        ) {
+          throw error;
+        }
         retries--;
         if (retries === 0) throw error;
       }
