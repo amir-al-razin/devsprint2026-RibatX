@@ -1,6 +1,6 @@
 import { createFileRoute, Outlet } from '@tanstack/react-router'
 
-export const Route = createFileRoute('/(admin)/_layout')({
+export const Route = createFileRoute('/admin/_layout')({
   beforeLoad: () => {
     // TODO Day 6: Validate admin role claim in JWT
     // const token = sessionStorage.getItem('access_token')

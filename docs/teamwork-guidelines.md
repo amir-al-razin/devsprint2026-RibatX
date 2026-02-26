@@ -12,23 +12,23 @@ Splitting by "you do backend, I do frontend" or "you write tests, I write code" 
 
 ### Recommended Split (2 people, 1 frontend owner)
 
-| Person | Owns | Why grouped this way |
-|---|---|---|
-| **A — Core Transactions** | `apps/identity` + `apps/stock` | Auth is independent. Stock is the tightest, most critical logic (optimistic locking). Keeping both small services with one owner avoids partial implementations. |
-| **B — Async Pipeline** | `apps/gateway` + `apps/kitchen` + `apps/notification` | These three form one continuous flow: Gateway enqueues → Kitchen processes → Notification broadcasts. One person owning the whole pipeline eliminates contract mismatches mid-chain. |
-| **C / shared** | `apps/web` + `packages/types` + `infra/` + CI/CD | If 3 people: Person C owns the frontend and infrastructure.|
+| Person                    | Owns                                                  | Why grouped this way                                                                                                                                                                 |
+| ------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **A — Core Transactions** | `apps/identity` + `apps/stock`                        | Auth is independent. Stock is the tightest, most critical logic (optimistic locking). Keeping both small services with one owner avoids partial implementations.                     |
+| **B — Async Pipeline**    | `apps/gateway` + `apps/kitchen` + `apps/notification` | These three form one continuous flow: Gateway enqueues → Kitchen processes → Notification broadcasts. One person owning the whole pipeline eliminates contract mismatches mid-chain. |
+| **C / shared**            | `apps/web` + `packages/types` + `infra/` + CI/CD      | If 3 people: Person C owns the frontend and infrastructure.                                                                                                                          |
 
 ### If you are 3 people
 
-| Person | Owns |
-|---|---|
-| A | `apps/identity` + `apps/stock` + unit tests for Stock |
-| B | `apps/gateway` + `apps/kitchen` + unit tests for Gateway |
-| C | `apps/notification` + `apps/web` + `infra/` + CI/CD + Railway deployment |
+| Person | Owns                                                                     |
+| ------ | ------------------------------------------------------------------------ |
+| A      | `apps/identity` + `apps/stock` + unit tests for Stock                    |
+| B      | `apps/gateway` + `apps/kitchen` + unit tests for Gateway                 |
+| C      | `apps/notification` + `apps/web` + `infra/` + CI/CD + Railway deployment |
 
 ### Dependency order — who must finish first
 
-Services have a build-order dependency. Work in parallel only after the *contract* (types) is agreed, not after the *implementation* is done:
+Services have a build-order dependency. Work in parallel only after the _contract_ (types) is agreed, not after the _implementation_ is done:
 
 ```
 Day 1:  Everyone  →  packages/types defined (contracts agreed before code starts)
@@ -78,14 +78,14 @@ Do not start building something that isn't on the board. Do not build two things
 
 ## 3. Where Things Live
 
-| What | Where |
-|---|---|
-| Shared TS interfaces & enums | `packages/types/src/index.ts` — the **only** source of truth |
-| Zod schemas (frontend validation) | `packages/types/src/schemas.ts` |
-| Shared tsconfig | `packages/tsconfig/base.json` |
-| Service-specific types (DB shapes, internal) | Inside that service only — do not export these |
-| Environment variables | `.env.example` at root. Actual `.env` files are gitignored. |
-| Secrets | **Nowhere in the repo.** Use Railway env dashboard or local `.env`. |
+| What                                         | Where                                                               |
+| -------------------------------------------- | ------------------------------------------------------------------- |
+| Shared TS interfaces & enums                 | `packages/types/src/index.ts` — the **only** source of truth        |
+| Zod schemas (frontend validation)            | `packages/types/src/schemas.ts`                                     |
+| Shared tsconfig                              | `packages/tsconfig/base.json`                                       |
+| Service-specific types (DB shapes, internal) | Inside that service only — do not export these                      |
+| Environment variables                        | `.env.example` at root. Actual `.env` files are gitignored.         |
+| Secrets                                      | **Nowhere in the repo.** Use Railway env dashboard or local `.env`. |
 
 **Rule:** If two services or the frontend both need a type, it belongs in `packages/types`. If only one service needs it, keep it local.
 
@@ -105,7 +105,9 @@ This ensures the frontend can mock and build in parallel without waiting for the
 
 ## 5. Pre-Commit Checklist
 
-Run this mentally before every `git commit`:
+> **Husky runs automatically on every `git commit`** — it will auto-format your staged files with Prettier. If the hook fails, your commit is blocked.
+
+Before committing, also verify manually:
 
 ```
 [ ] My code compiles with no TypeScript errors (`pnpm tsc --noEmit`)
@@ -121,10 +123,13 @@ Run this mentally before every `git commit`:
 
 ## 6. Pre-Push / Pre-PR Checklist
 
+> **Husky runs automatically on every `git push`** — it runs the full test suite (`pnpm turbo test`). If any test fails, the push is blocked. Fix the tests before retrying.
+
+Additionally verify before opening a PR:
+
 ```
 [ ] pnpm install — no lockfile conflicts
 [ ] pnpm turbo build --filter=<my-app> — builds cleanly
-[ ] pnpm turbo test --filter=<my-app> — all tests pass
 [ ] docker compose up — the system still starts (spot-check your service)
 [ ] PR description answers: What does this do? How do I test it?
 [ ] PR is targeting `dev`, not `main`
@@ -153,18 +158,73 @@ If you must change one: do it in an isolated PR, tag everyone, and merge only af
 - Add any new variable to `.env.example` with a placeholder value in the same commit it is used.
 - Document it in the PR description.
 - Never default to a hardcoded fallback in production code:
+
   ```ts
   // ❌ Bad
-  const secret = process.env.JWT_SECRET ?? 'mysecret';
+  const secret = process.env.JWT_SECRET ?? "mysecret";
 
   // ✅ Good
-  if (!process.env.JWT_SECRET) throw new Error('JWT_SECRET is not set');
+  if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET is not set");
   const secret = process.env.JWT_SECRET;
   ```
 
 ---
 
-## 9. Communication Rules
+## 9. Testing Strategy
+
+**Libraries:** Jest + `@nestjs/testing` + `supertest` for all NestJS services. Vitest for `apps/web`. Both are already installed — no setup needed.
+
+### Rule: test your own service, mock everything else
+
+Unit tests must never touch a real database, Redis, or HTTP endpoint. Use Jest mocks to replace dependencies:
+
+```ts
+// Example: apps/identity/src/auth/auth.service.spec.ts
+const mockPrisma = { student: { findUnique: jest.fn(), create: jest.fn() } };
+const mockRedis = { incr: jest.fn(), expire: jest.fn() };
+const mockJwt = { sign: jest.fn().mockReturnValue("token") };
+
+const module = await Test.createTestingModule({
+  providers: [
+    AuthService,
+    { provide: PrismaService, useValue: mockPrisma },
+    { provide: JwtService, useValue: mockJwt },
+    { provide: "REDIS_CLIENT", useValue: mockRedis },
+  ],
+}).compile();
+```
+
+### What to test per service (minimum required)
+
+| Service        | Required spec file                          | Must cover                                                                                               |
+| -------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `identity`     | `auth/auth.service.spec.ts`                 | login happy path, wrong password → 401, 4th attempt → 429                                                |
+| `gateway`      | `orders/orders.service.spec.ts`             | no token → 401, cache hit stock=0 → 409, duplicate idempotency key → cached response                     |
+| `stock`        | `stock/stock.service.spec.ts`               | successful reserve decrements qty+version, version conflict after 3 retries → 409, qty=0 → immediate 409 |
+| `kitchen`      | `kitchen/kitchen.processor.spec.ts`         | job processes and calls Notification Hub, job failure retries                                            |
+| `notification` | `notification/notification.service.spec.ts` | socket emits to correct room, PATCH /notify triggers broadcast                                           |
+
+### How to run tests while building
+
+```bash
+# Only your service, re-runs on save
+cd apps/identity
+pnpm test:watch
+
+# Only your service, single run
+pnpm turbo test --filter=@ribatx/identity
+
+# All services (Husky runs this automatically on git push)
+pnpm turbo test
+```
+
+### When to write the test
+
+Write the test **in the same PR as the feature** — not after, not in a cleanup PR. If a spec file doesn't exist for your feature, CI will still pass, but the PR reviewer should reject it.
+
+---
+
+## 10. Communication Rules
 
 - **Blocking on someone?** Ping directly, don't wait more than 2 hours silently.
 - **Changing a shared contract?** Always announce _before_ committing, not after.
@@ -173,7 +233,7 @@ If you must change one: do it in an isolated PR, tag everyone, and merge only af
 
 ---
 
-## 10. The Non-Negotiables
+## 11. The Non-Negotiables
 
 These are the rules that protect the demo. Breaking any of these breaks the submission:
 
