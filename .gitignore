@@ -35,3 +35,4 @@ apps/**/generated
 
 # Docker
 *.dockerignore
+package-lock.json
