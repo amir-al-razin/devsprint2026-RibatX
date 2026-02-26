@@ -36,3 +36,5 @@ apps/**/generated
 # Docker
 *.dockerignore
 package-lock.json
+# Prisma generated clients (regenerated via prisma generate in build script)
+apps/*/src/generated

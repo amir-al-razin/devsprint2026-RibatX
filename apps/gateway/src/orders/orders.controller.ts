@@ -1,6 +1,6 @@
 import { Controller, Post, Body, UseGuards, Req } from '@nestjs/common';
 import { OrdersService } from './orders.service';
-import { JwtAuthGuard } from '../auth/jwt.guard';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { IdempotencyGuard } from '../common/guards/idempotency.guard';
 
 @Controller('orders')
