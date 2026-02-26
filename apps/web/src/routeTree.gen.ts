@@ -9,50 +9,124 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
+import { Route as AdminIndexRouteImport } from './routes/admin/index'
+import { Route as studentIndexRouteImport } from './routes/(student)/index'
+import { Route as AdminLayoutRouteImport } from './routes/admin/_layout'
+import { Route as studentLoginRouteImport } from './routes/(student)/login'
+import { Route as studentLayoutRouteImport } from './routes/(student)/_layout'
 
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/admin/',
+  path: '/admin/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const studentIndexRoute = studentIndexRouteImport.update({
+  id: '/(student)/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminLayoutRoute = AdminLayoutRouteImport.update({
+  id: '/admin/_layout',
+  path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const studentLoginRoute = studentLoginRouteImport.update({
+  id: '/(student)/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const studentLayoutRoute = studentLayoutRouteImport.update({
+  id: '/(student)/_layout',
   getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
+  '/login': typeof studentLoginRoute
+  '/admin': typeof AdminLayoutRoute
+  '/': typeof studentIndexRoute
+  '/admin/': typeof AdminIndexRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
+  '/login': typeof studentLoginRoute
+  '/admin': typeof AdminIndexRoute
+  '/': typeof studentIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
+  '/(student)/_layout': typeof studentLayoutRoute
+  '/(student)/login': typeof studentLoginRoute
+  '/admin/_layout': typeof AdminLayoutRoute
+  '/(student)/': typeof studentIndexRoute
+  '/admin/': typeof AdminIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/login' | '/admin' | '/' | '/admin/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/login' | '/admin' | '/'
+  id:
+    | '__root__'
+    | '/(student)/_layout'
+    | '/(student)/login'
+    | '/admin/_layout'
+    | '/(student)/'
+    | '/admin/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
+  studentLayoutRoute: typeof studentLayoutRoute
+  studentLoginRoute: typeof studentLoginRoute
+  AdminLayoutRoute: typeof AdminLayoutRoute
+  studentIndexRoute: typeof studentIndexRoute
+  AdminIndexRoute: typeof AdminIndexRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
+    '/admin/': {
+      id: '/admin/'
+      path: '/admin'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/(student)/': {
+      id: '/(student)/'
       path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+      preLoaderRoute: typeof studentIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/_layout': {
+      id: '/admin/_layout'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminLayoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/(student)/login': {
+      id: '/(student)/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof studentLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/(student)/_layout': {
+      id: '/(student)/_layout'
+      path: ''
+      fullPath: ''
+      preLoaderRoute: typeof studentLayoutRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
+  studentLayoutRoute: studentLayoutRoute,
+  studentLoginRoute: studentLoginRoute,
+  AdminLayoutRoute: AdminLayoutRoute,
+  studentIndexRoute: studentIndexRoute,
+  AdminIndexRoute: AdminIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
