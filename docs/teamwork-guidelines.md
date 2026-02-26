@@ -126,6 +126,48 @@ git push
 
 ---
 
+### Commit size and atomicity rules
+
+> **One commit = one logical change.** This is the rule that prevents the "giant commit" problem — where one commit touches 10 files across 4 services and breaks in CI, making it nearly impossible to bisect or revert cleanly.
+
+**Hard rules:**
+
+- **One concern per commit.** A commit that adds a feature must not also fix an unrelated bug, bump a dependency, and reformat files. Split those into separate commits.
+- **Never batch across services.** If you fixed something in `gateway` and something in `kitchen`, those are two commits — even if you discovered both issues at the same time.
+- **Keep it under ~200 lines changed** as a soft ceiling. If `git diff --staged | wc -l` returns more than 200, ask yourself: can this be split into two logical steps?
+- **A commit must build and pass tests on its own.** If cherry-picking a single commit would break the build, it is too tightly bundled with its neighbours.
+
+**How to stage partial changes** (instead of `git add .`):
+
+```bash
+# Stage only specific files
+git add apps/gateway/src/orders/orders.controller.ts
+
+# Stage specific hunks inside one file interactively
+git add -p apps/kitchen/src/app.module.ts
+```
+
+**What good looks like:**
+
+```
+fix(kitchen): add missing axios and @nestjs/terminus deps
+fix(kitchen): fix parseInt(undefined) type error in app.module
+fix(gateway): add missing @nestjs/passport dep
+fix(gateway): correct jwt-auth.guard import path
+fix(identity): isolate prisma generate output to src/generated
+fix(stock): isolate prisma generate output to src/generated
+```
+
+**What "giant commit" looks like — and why it hurts:**
+
+```
+fix(build): resolve all CI build failures across 5 services   ← 12 files, 4 services, 5 unrelated fixes
+```
+
+When this fails in CI you cannot tell which of the 5 fixes broke it. You cannot revert one fix without reverting all of them. Code review becomes overwhelming. **Split before you push, not after.**
+
+---
+
 ### Opening a Pull Request
 
 ```bash
@@ -229,6 +271,9 @@ This ensures the frontend can mock and build in parallel without waiting for the
 Before committing, also verify manually:
 
 ```
+[ ] This commit covers exactly one logical change — not multiple unrelated fixes
+[ ] I staged specific files (git add <file>), not git add .
+[ ] git diff --staged touches fewer than ~200 lines (if more, split the commit)
 [ ] My code compiles with no TypeScript errors (`pnpm tsc --noEmit`)
 [ ] I haven't hardcoded any URL, secret, or port — all come from env vars
 [ ] I haven't modified another service's code without telling the owner
