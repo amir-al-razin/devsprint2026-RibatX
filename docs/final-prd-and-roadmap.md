@@ -666,7 +666,7 @@ apps/web/app/routes/
 
 ---
 
-### Day 5 — Health/Metrics + Unit Tests + CI Green
+### Day 5 — Health/Metrics + Unit Tests + CI Green ✅
 
 **Goal:** All 5 services have working `/health` and `/metrics`. CI pipeline runs and passes.
 
@@ -674,18 +674,18 @@ apps/web/app/routes/
 
 **All Services:**
 
-- [ ] `GET /health`: ping `prisma.$queryRaw('SELECT 1')` and `redis.ping()`. Return `200` or `503`
-- [ ] `GET /metrics`: return structured JSON with uptime, orders totals, error counts, avg latency
-- [ ] Request duration tracking: NestJS interceptor that records response time for every request, maintains a rolling array of last 100 durations
+- [x] `GET /health`: ping `prisma.$queryRaw('SELECT 1')` and `redis.ping()`. Return `200` or `503`
+- [x] `GET /metrics`: return structured JSON with uptime, orders totals, error counts, avg latency
+- [x] Request duration tracking: NestJS interceptor that records response time for every request, maintains a rolling array of last 100 durations
 
 **Unit Tests:**
 
-- [ ] `apps/gateway/src/orders/orders.service.spec.ts`:
+- [x] `apps/gateway/src/orders/orders.service.spec.ts`:
   - Test: missing idempotency key → new order created
   - Test: duplicate idempotency key → cached response returned
   - Test: cache hit with stock = 0 → `409` thrown without calling Stock Service
   - Test: invalid JWT payload shape → `401`
-- [ ] `apps/stock/src/stock/stock.service.spec.ts`:
+- [x] `apps/stock/src/stock/stock.service.spec.ts`:
   - Test: successful reservation decrements quantity and increments version
   - Test: version conflict (simulate 3 failures) → throws `409` after retries exhausted
   - Test: `quantity = 0` → immediate `409` without DB update
