@@ -5,6 +5,7 @@ import { AppService } from './app.service';
 import { BullModule } from '@nestjs/bullmq';
 import { TerminusModule } from '@nestjs/terminus';
 import { OrdersProcessor } from './orders.processor';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { OrdersProcessor } from './orders.processor';
       name: 'kitchen-orders',
     }),
     TerminusModule,
+    HealthModule,
   ],
   controllers: [AppController],
   providers: [AppService, OrdersProcessor],
