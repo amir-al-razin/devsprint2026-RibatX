@@ -7,6 +7,8 @@ import { BullModule } from '@nestjs/bullmq';
 import { OrdersModule } from './orders/orders.module';
 import { JwtStrategy } from './auth/jwt.strategy';
 import { ChaosController } from './chaos.controller';
+import { HealthModule } from './health/health.module';
+import { MetricsModule } from './metrics/metrics.module';
 
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { MetricsInterceptor } from './common/interceptors/metrics.interceptor';
@@ -25,6 +27,8 @@ import { MetricsInterceptor } from './common/interceptors/metrics.interceptor';
       },
     }),
     OrdersModule,
+    HealthModule,
+    MetricsModule,
   ],
   controllers: [AppController, ChaosController],
   providers: [
