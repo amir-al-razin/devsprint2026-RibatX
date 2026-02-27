@@ -4,6 +4,7 @@ import { AppService } from './app.service';
 import { RedisModule } from '@nestjs-modules/ioredis';
 import { PrismaModule } from './prisma/prisma.module';
 import { StockModule } from './stock/stock.module';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { StockModule } from './stock/stock.module';
     }),
     PrismaModule,
     StockModule,
+    HealthModule,
   ],
   controllers: [AppController],
   providers: [AppService],
