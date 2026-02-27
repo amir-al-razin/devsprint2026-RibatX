@@ -4,6 +4,10 @@ import { StockService } from './stock.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { getRedisConnectionToken } from '@nestjs-modules/ioredis';
 
+jest.mock('../prisma/prisma.service', () => ({
+  PrismaService: jest.fn().mockImplementation(() => ({ item: {} })),
+}));
+
 describe('StockService', () => {
   let service: StockService;
   let prisma: { item: { findUnique: jest.Mock; updateMany: jest.Mock } };
