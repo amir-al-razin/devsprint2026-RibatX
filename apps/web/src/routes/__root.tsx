@@ -1,6 +1,7 @@
 import { HeadContent, Scripts, createRootRoute } from '@tanstack/react-router'
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
+import { Toaster } from '@/components/ui/sonner'
 
 import appCss from '../styles.css?url'
 
@@ -15,7 +16,7 @@ export const Route = createRootRoute({
         content: 'width=device-width, initial-scale=1',
       },
       {
-        title: 'TanStack Start Starter',
+        title: 'IUT Cafeteria',
       },
     ],
     links: [
@@ -37,6 +38,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         {children}
+        <Toaster richColors position="top-right" />
         <TanStackDevtools
           config={{
             position: 'bottom-right',
