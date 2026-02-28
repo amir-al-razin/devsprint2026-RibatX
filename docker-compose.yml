@@ -48,6 +48,7 @@ services:
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:4000}
+      ADMIN_STUDENT_IDS: ${ADMIN_STUDENT_IDS:-admin001}
     depends_on:
       postgres:
         condition: service_healthy

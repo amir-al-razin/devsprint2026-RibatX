@@ -60,11 +60,19 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const payload = { sub: student.studentId, name: student.name };
+    // Determine role: comma-separated ADMIN_STUDENT_IDS env var
+    const adminIds = (process.env.ADMIN_STUDENT_IDS ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const role = adminIds.includes(student.studentId) ? 'admin' : 'student';
+
+    const payload = { sub: student.studentId, name: student.name, role };
     return {
       access_token: await this.jwtService.signAsync(payload),
       studentId: student.studentId,
       name: student.name,
+      role,
     };
   }
 }
