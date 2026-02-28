@@ -83,6 +83,45 @@ docker compose up --build
 
 ---
 
+## User Accounts
+
+There is no self-registration UI. Accounts are created via the Identity API directly.
+
+### Default demo accounts (seeded automatically)
+
+| Role    | Student ID   | Password    | Notes                        |
+| ------- | ------------ | ----------- | ---------------------------- |
+| Student | `2021331042` | `pass1234`  | Regular student account      |
+| Admin   | `admin001`   | `admin1234` | Access to `/admin` dashboard |
+
+> Admin accounts are controlled by the `ADMIN_STUDENT_IDS` env var (comma-separated). Any student ID listed there receives `role=admin` in their JWT.
+
+### Creating a new student account
+
+```bash
+curl -X POST http://localhost:3001/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"studentId":"2021331099","name":"New Student","password":"pass1234"}'
+```
+
+The account is immediately usable — log in at `http://localhost:4000`.
+
+### Promoting a user to admin
+
+Add their student ID to `ADMIN_STUDENT_IDS` in your `.env` file and restart the identity service:
+
+```env
+ADMIN_STUDENT_IDS=admin001,2021331099
+```
+
+```bash
+docker compose restart identity
+```
+
+They must log out and log back in to get a fresh JWT with the `role=admin` claim.
+
+---
+
 ## Contributing
 
 We use a `main → dev → feat/<name>/<feature>` branch strategy.

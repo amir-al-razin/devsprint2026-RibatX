@@ -10,13 +10,16 @@ import { getQueueToken } from '@nestjs/bullmq';
 describe('OrdersService', () => {
   let service: OrdersService;
   let httpService: { post: jest.Mock };
-  let redis: { get: jest.Mock };
+  let redis: { get: jest.Mock; incr: jest.Mock };
   let kitchenQueue: { add: jest.Mock };
 
   beforeEach(async () => {
     httpService = { post: jest.fn() };
     // Default: no chaos for any service, no cached stock
-    redis = { get: jest.fn().mockResolvedValue(null) };
+    redis = {
+      get: jest.fn().mockResolvedValue(null),
+      incr: jest.fn().mockResolvedValue(1),
+    };
     kitchenQueue = { add: jest.fn().mockResolvedValue({}) };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -44,6 +47,7 @@ describe('OrdersService', () => {
       );
       expect(httpService.post).not.toHaveBeenCalled();
       expect(kitchenQueue.add).not.toHaveBeenCalled();
+      expect(redis.incr).toHaveBeenCalledWith('metrics:cache:hits');
     });
 
     it('returns PENDING order and enqueues kitchen job when stock is available', async () => {
@@ -60,6 +64,7 @@ describe('OrdersService', () => {
         'cook-order',
         expect.objectContaining({ studentId: 'student-1', itemId: 'item-1' }),
       );
+      expect(redis.incr).toHaveBeenCalledWith('metrics:cache:hits');
     });
 
     it('proceeds to Stock Service when Redis cache key is absent (cache miss)', async () => {
@@ -72,6 +77,7 @@ describe('OrdersService', () => {
 
       expect(result.status).toBe('PENDING');
       expect(httpService.post).toHaveBeenCalled();
+      expect(redis.incr).toHaveBeenCalledWith('metrics:cache:misses');
     });
 
     it('throws ConflictException when Stock Service responds with 409', async () => {
@@ -92,6 +98,7 @@ describe('OrdersService', () => {
       await expect(service.createOrder('student-1', 'item-1')).rejects.toThrow(
         ServiceUnavailableException,
       );
+      expect(redis.incr).toHaveBeenCalledWith('metrics:orders:failed');
     });
 
     it('throws ServiceUnavailableException when chaos mode is active', async () => {
