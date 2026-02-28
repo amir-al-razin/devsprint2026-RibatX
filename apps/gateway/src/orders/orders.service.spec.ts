@@ -10,13 +10,16 @@ import { getQueueToken } from '@nestjs/bullmq';
 describe('OrdersService', () => {
   let service: OrdersService;
   let httpService: { post: jest.Mock };
-  let redis: { get: jest.Mock };
+  let redis: { get: jest.Mock; incr: jest.Mock };
   let kitchenQueue: { add: jest.Mock };
 
   beforeEach(async () => {
     httpService = { post: jest.fn() };
     // Default: no chaos for any service, no cached stock
-    redis = { get: jest.fn().mockResolvedValue(null) };
+    redis = {
+      get: jest.fn().mockResolvedValue(null),
+      incr: jest.fn().mockResolvedValue(1),
+    };
     kitchenQueue = { add: jest.fn().mockResolvedValue({}) };
 
     const module: TestingModule = await Test.createTestingModule({
