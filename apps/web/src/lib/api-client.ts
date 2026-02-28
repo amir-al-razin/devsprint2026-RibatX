@@ -113,6 +113,13 @@ export const gatewayApi = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+
+  getChaosStatus: (service: string) =>
+    request<{ service: string; chaosMode: 'ON' | 'OFF' }>(
+      GATEWAY_BASE,
+      `/admin/chaos/status?service=${service}`,
+      { skipAuth: true },
+    ),
 }
 
 // ─────────────────────────────────────────────
@@ -128,7 +135,7 @@ function svcBase(envKey: string, fallbackPort: number): string {
 
 export const stockApi = {
   items: () =>
-    request<StockItem[]>(svcBase('VITE_STOCK_URL', 3002), '/items', {
+    request<StockItem[]>(svcBase('VITE_STOCK_URL', 3002), '/stock/items', {
       skipAuth: true,
     }),
   health: () =>
@@ -143,7 +150,7 @@ export const stockApi = {
 
 export const kitchenApi = {
   queueLength: () =>
-    request<{ length: number }>(
+    request<{ waiting: number; active: number; total: number }>(
       svcBase('VITE_KITCHEN_URL', 3003),
       '/queue/length',
       { skipAuth: true },
