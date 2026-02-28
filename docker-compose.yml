@@ -83,9 +83,8 @@ services:
       dockerfile: apps/stock/Dockerfile
     container_name: ribatx_stock
     restart: unless-stopped
-    # Not exposed externally — only reachable within the Docker network
-    expose:
-      - "3002"
+    ports:
+      - "3002:3002"
     environment:
       NODE_ENV: production
       PORT: 3002
@@ -103,8 +102,8 @@ services:
       dockerfile: apps/kitchen/Dockerfile
     container_name: ribatx_kitchen
     restart: unless-stopped
-    expose:
-      - "3003"
+    ports:
+      - "3003:3003"
     environment:
       NODE_ENV: production
       PORT: 3003
@@ -142,6 +141,12 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      args:
+        VITE_GATEWAY_URL: http://localhost:3000
+        VITE_IDENTITY_URL: http://localhost:3001
+        VITE_STOCK_URL: http://localhost:3002
+        VITE_KITCHEN_URL: http://localhost:3003
+        VITE_NOTIFICATION_URL: http://localhost:3004
     container_name: ribatx_web
     restart: unless-stopped
     ports:
@@ -149,8 +154,6 @@ services:
     environment:
       NODE_ENV: production
       PORT: 4000
-      VITE_GATEWAY_URL: http://gateway:3000
-      VITE_NOTIFICATION_URL: http://notification:3004
     depends_on:
       - gateway
       - notification
