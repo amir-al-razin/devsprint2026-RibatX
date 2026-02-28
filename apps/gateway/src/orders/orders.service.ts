@@ -36,14 +36,13 @@ export class OrdersService {
 
     // 1. Check Redis cache first (resilience/speed)
     const cachedStock = await this.redis.get(`stock:${itemId}`);
-    if (cachedStock === '0') {
-      await this.redis.incr('metrics:cache:hits'); // cache served the answer
-      throw new ConflictException('Out of stock (cached)');
-    }
     if (cachedStock !== null) {
-      await this.redis.incr('metrics:cache:hits');
+      await this.redis.incr('metrics:cache:hits'); // cache served the answer
     } else {
       await this.redis.incr('metrics:cache:misses');
+    }
+    if (cachedStock === '0') {
+      throw new ConflictException('Out of stock (cached)');
     }
 
     // 2. Call Stock Service to reserve
