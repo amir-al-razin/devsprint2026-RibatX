@@ -25,15 +25,31 @@ export class MetricsController {
       durations.length > 0
         ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length)
         : 0;
-    const peak_latency_ms = durations.length > 0 ? Math.max(...durations) : 0;
-    const sample_count = durations.length;
+    const sorted = [...durations].sort((a, b) => a - b);
+    const p95_latency_ms =
+      sorted.length > 0
+        ? (sorted[Math.floor(sorted.length * 0.95)] ??
+          sorted[sorted.length - 1])
+        : 0;
+
+    // Cache stats stored by MetricsInterceptor
+    const cacheHitsRaw = await this.redis.get('metrics:cache:hits');
+    const cacheMissesRaw = await this.redis.get('metrics:cache:misses');
+    const cache_hits = parseInt(cacheHitsRaw ?? '0', 10);
+    const cache_misses = parseInt(cacheMissesRaw ?? '0', 10);
+
+    // Failed orders counter
+    const failedRaw = await this.redis.get('metrics:orders:failed');
+    const orders_failed = parseInt(failedRaw ?? '0', 10);
 
     return {
       uptime_seconds,
       orders_total,
+      orders_failed,
       avg_latency_ms,
-      peak_latency_ms,
-      sample_count,
+      p95_latency_ms,
+      cache_hits,
+      cache_misses,
     };
   }
 }

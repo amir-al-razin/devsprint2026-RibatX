@@ -1,9 +1,13 @@
-import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  ConflictException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 
 @Injectable()
 export class AuthService {
@@ -47,17 +51,28 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const passwordMatches = await bcrypt.compare(dto.password, student.password);
+    const passwordMatches = await bcrypt.compare(
+      dto.password,
+      student.password,
+    );
 
     if (!passwordMatches) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const payload = { sub: student.studentId, name: student.name };
+    // Determine role: comma-separated ADMIN_STUDENT_IDS env var
+    const adminIds = (process.env.ADMIN_STUDENT_IDS ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const role = adminIds.includes(student.studentId) ? 'admin' : 'student';
+
+    const payload = { sub: student.studentId, name: student.name, role };
     return {
       access_token: await this.jwtService.signAsync(payload),
       studentId: student.studentId,
       name: student.name,
+      role,
     };
   }
 }

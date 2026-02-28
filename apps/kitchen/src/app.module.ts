@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { QueueController } from './queue/queue.controller';
 
 import { BullModule } from '@nestjs/bullmq';
 import { TerminusModule } from '@nestjs/terminus';
@@ -10,10 +11,10 @@ import { HealthModule } from './health/health.module';
 @Module({
   imports: [
     BullModule.forRoot({
-      connection: {
-        host: process.env.REDIS_HOST || 'localhost',
-        port: parseInt(process.env.REDIS_PORT || '6379', 10),
-      },
+      connection: (() => {
+        const url = new URL(process.env.REDIS_URL || 'redis://localhost:6379');
+        return { host: url.hostname, port: parseInt(url.port || '6379', 10) };
+      })(),
     }),
     BullModule.registerQueue({
       name: 'kitchen-orders',
@@ -21,7 +22,7 @@ import { HealthModule } from './health/health.module';
     TerminusModule,
     HealthModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, QueueController],
   providers: [AppService, OrdersProcessor],
 })
 export class AppModule {}

@@ -520,13 +520,13 @@ apps/web/app/routes/
 ### Overview
 
 | Day   | Focus                                                            | Owner    |
-| ----- | ---------------------------------------------------------------- | -------- |
+| ----- | ---------------------------------------------------------------- | -------- | --- |
 | Day 1 | Foundation: monorepo, Docker skeleton, shared types, CI scaffold | All      |
 | Day 2 | Identity Provider + Order Gateway core                           | Backend  |
 | Day 3 | Stock Service + Redis caching layer                              | Backend  |
 | Day 4 | Kitchen Queue + Notification Hub                                 | Backend  |
 | Day 5 | Health/Metrics on all services + Unit Tests + CI complete        | Backend  |
-| Day 6 | Student UI + Admin Dashboard                                     | Frontend |
+| Day 6 | Student UI + Admin Dashboard                                     | Frontend | ✅  |
 | Day 7 | Integration, Polish, Cloud Deployment                            | All      |
 
 ---
@@ -714,7 +714,7 @@ jobs:
 
 ---
 
-### Day 6 — Frontend: Unified `apps/web` (TanStack Start)
+### Day 6 — Frontend: Unified `apps/web` (TanStack Start) ✅ COMPLETE
 
 **Goal:** Both route groups are functional. The full student journey and admin observability work end-to-end in a single app.
 
@@ -722,34 +722,34 @@ jobs:
 
 **Foundation (`apps/web`):**
 
-- [ ] Install only what the template doesn't already include: `socket.io-client` (run `pnpm add socket.io-client` in `apps/web`)
-- [ ] Add required ShadCN components: `pnpm dlx shadcn@latest add badge card switch separator sonner chart`
-- [ ] Configure TanStack Start `app.config.ts`: proxy `/api/*` to Gateway `:3000`, `/socket.io/*` to Notification Hub `:3004`
-- [ ] Build the one custom piece: `useMetricsPoller(url, interval)` hook in `apps/web/hooks/`
+- [x] Install only what the template doesn't already include: `socket.io-client` (run `pnpm add socket.io-client` in `apps/web`)
+- [x] Add required ShadCN components: `pnpm dlx shadcn@latest add badge card switch separator sonner chart`
+- [x] Configure TanStack Start `vite.config.ts`: proxy `/api/*` to Gateway `:3000`, `/socket.io/*` to Notification Hub `:3004`
+- [x] Build the one custom piece: `useMetricsPoller(url, interval)` hook in `apps/web/src/hooks/`
 
 **`(student)` Route Group:**
 
-- [ ] `_layout.tsx`: read JWT from cookie → redirect to `/login` if absent/expired; establish Socket.io connection on mount
-- [ ] `login.tsx`: Student ID + password form; handle `429` with countdown message; on success store JWT and redirect to `/`
-- [ ] `index.tsx` (Order Dashboard):
+- [x] `_layout.tsx`: read JWT from localStorage → redirect to `/login` if absent/expired; SSR guard prevents server-side redirect loop
+- [x] `login.tsx`: Student ID + password form; handle `429` with countdown message; on success store JWT and redirect to `/`
+- [x] `index.tsx` (Order Dashboard):
   - "Order Iftar" button with optimistic update
   - `POST /api/orders` with Bearer token
-  - On `202`: lock button to "Order Placed ✓"; listen for `order:status` Socket.io events
-  - On error: revert + toast
+  - On `202`: lock button to "Order Placed ✓"; listen for `order:status` Socket.io events via `useOrderStatus` hook
+  - On error: revert + toast (chaos 503 shows dedicated warning)
   - Status Tracker: 4-step progress (Grey → Blue → Orange → Green flashing)
   - Queue position badge: poll `GET /api/queue/length` every 5s
 
 **`(admin)` Route Group:**
 
-- [ ] `_layout.tsx`: validate admin role in JWT; redirect if unauthorized
-- [ ] `index.tsx` (Admin Dashboard):
-  - Health Grid: poll all 5 service `/health` endpoints every 5s; render Green/Red ShadCN `<Badge>` per service
-  - Metrics Panel: poll Gateway `/metrics` every 3s using `useMetricsPoller`; display in ShadCN `<Card>` widgets
+- [x] `_layout.tsx`: JWT presence check → redirect if absent/expired; SSR guard added; role-based access enforced via `role` claim in JWT (`isAdmin()`) — admin student IDs configured via `ADMIN_STUDENT_IDS` env var
+- [x] `index.tsx` (Admin Dashboard):
+  - Health Grid: poll all 5 service `/health` endpoints every 5s; Green/Red + pulsing **CHAOS** badge per service
+  - Metrics Panel: poll Gateway `/metrics` every 3s using `useMetricsPoller`; displayed in ShadCN `<Card>` widgets
   - Cache Hit Chart: ShadCN `<ChartContainer>` + Recharts `LineChart`, rolling 60-point buffer of `cache_hits` vs `cache_misses`
-  - Chaos Toggle: ShadCN `<Switch>` per service → `POST /api/admin/chaos { service, enabled }`
-  - Latency Alert: maintain 30s rolling avg of `avg_latency_ms`; if > 1000ms render full-screen red overlay
+  - Chaos Toggle: ShadCN `<Switch>` per service → `POST /admin/chaos { service, enabled }`; gateway blocks orders with 503 when active
+  - Latency Alert: maintain 30s rolling avg of `avg_latency_ms`; if > 1000ms renders full-screen red overlay
 
-**Checkpoint:** Single `docker compose up` → browse `:4000` for Student UI, `:4000/admin` for Admin Dashboard. Full order flow completes. Chaos Toggle kills a service and both groups respond correctly.
+**Checkpoint:** ✅ Single `docker compose up` → browse `:4000` for Student UI, `:4000/admin` for Admin Dashboard. Full order flow completes. Chaos Toggle blocks orders on the backend and the admin UI shows CHAOS badge. Both groups respond correctly.
 
 ---
 

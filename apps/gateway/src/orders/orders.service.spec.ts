@@ -15,7 +15,8 @@ describe('OrdersService', () => {
 
   beforeEach(async () => {
     httpService = { post: jest.fn() };
-    redis = { get: jest.fn() };
+    // Default: no chaos for any service, no cached stock
+    redis = { get: jest.fn().mockResolvedValue(null) };
     kitchenQueue = { add: jest.fn().mockResolvedValue({}) };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -91,6 +92,19 @@ describe('OrdersService', () => {
       await expect(service.createOrder('student-1', 'item-1')).rejects.toThrow(
         ServiceUnavailableException,
       );
+    });
+
+    it('throws ServiceUnavailableException when chaos mode is active', async () => {
+      // Activate chaos on the stock service
+      redis.get.mockImplementation((key: string) =>
+        Promise.resolve(key === 'chaos:gateway' ? '1' : null),
+      );
+
+      await expect(service.createOrder('student-1', 'item-1')).rejects.toThrow(
+        ServiceUnavailableException,
+      );
+      expect(httpService.post).not.toHaveBeenCalled();
+      expect(kitchenQueue.add).not.toHaveBeenCalled();
     });
   });
 });

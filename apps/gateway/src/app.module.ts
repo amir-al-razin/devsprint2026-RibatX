@@ -21,10 +21,10 @@ import { MetricsInterceptor } from './common/interceptors/metrics.interceptor';
     }),
     JwtModule.register({}),
     BullModule.forRoot({
-      connection: {
-        host: process.env.REDIS_HOST || 'localhost',
-        port: parseInt(process.env.REDIS_PORT || '6379', 10),
-      },
+      connection: (() => {
+        const url = new URL(process.env.REDIS_URL || 'redis://localhost:6379');
+        return { host: url.hostname, port: parseInt(url.port || '6379', 10) };
+      })(),
     }),
     OrdersModule,
     HealthModule,
