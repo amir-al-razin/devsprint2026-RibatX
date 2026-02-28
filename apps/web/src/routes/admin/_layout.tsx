@@ -1,7 +1,12 @@
-import { createFileRoute, Outlet, redirect } from '@tanstack/react-router'
+import {
+  createFileRoute,
+  Outlet,
+  redirect,
+  useRouter,
+} from '@tanstack/react-router'
 import { getValidToken, isAdmin, clearToken } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
-import { useRouter } from '@tanstack/react-router'
+import { useEffect, useState } from 'react'
 
 export const Route = createFileRoute('/admin/_layout')({
   beforeLoad: () => {
@@ -14,11 +19,24 @@ export const Route = createFileRoute('/admin/_layout')({
 
 function AdminLayout() {
   const router = useRouter()
+  const [checking, setChecking] = useState(true)
+
+  // Guards initial hard-load / refresh — beforeLoad only fires on client-side navigation
+  useEffect(() => {
+    const token = getValidToken()
+    if (!token || !isAdmin(token)) {
+      router.navigate({ to: '/login', replace: true })
+    } else {
+      setChecking(false)
+    }
+  }, [router])
 
   function handleLogout() {
     clearToken()
     router.navigate({ to: '/login' })
   }
+
+  if (checking) return null
 
   return (
     <div className="min-h-screen bg-background">

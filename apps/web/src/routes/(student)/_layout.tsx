@@ -1,5 +1,11 @@
-import { createFileRoute, Outlet, redirect } from '@tanstack/react-router'
+import {
+  createFileRoute,
+  Outlet,
+  redirect,
+  useRouter,
+} from '@tanstack/react-router'
 import { getValidToken, getStudentId, getStudentName } from '@/lib/auth'
+import { useEffect, useState } from 'react'
 
 export const Route = createFileRoute('/(student)/_layout')({
   beforeLoad: () => {
@@ -11,9 +17,24 @@ export const Route = createFileRoute('/(student)/_layout')({
 })
 
 function StudentLayout() {
+  const router = useRouter()
+  const [checking, setChecking] = useState(true)
+
+  // Guards initial hard-load / refresh — beforeLoad only fires on client-side navigation
+  useEffect(() => {
+    const token = getValidToken()
+    if (!token) {
+      router.navigate({ to: '/login', replace: true })
+    } else {
+      setChecking(false)
+    }
+  }, [router])
+
   const token = getValidToken()
   const name = token ? getStudentName(token) : null
   const studentId = token ? getStudentId(token) : null
+
+  if (checking) return null
 
   return (
     <div className="min-h-screen bg-background">
