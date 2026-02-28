@@ -16,6 +16,7 @@ import {
 
 export const Route = createFileRoute('/(student)/login')({
   beforeLoad: () => {
+    if (typeof window === 'undefined') return // SSR: skip
     // Already logged in → skip the login page
     if (getValidToken()) {
       throw { redirect: { to: '/' } }

@@ -5,16 +5,21 @@
 
 const TOKEN_KEY = 'access_token'
 
+/** Returns sessionStorage on the client, null on the server (SSR). */
+function storage(): Storage | null {
+  return typeof window !== 'undefined' ? localStorage : null
+}
+
 export function storeToken(token: string): void {
-  sessionStorage.setItem(TOKEN_KEY, token)
+  storage()?.setItem(TOKEN_KEY, token)
 }
 
 export function getToken(): string | null {
-  return sessionStorage.getItem(TOKEN_KEY)
+  return storage()?.getItem(TOKEN_KEY) ?? null
 }
 
 export function clearToken(): void {
-  sessionStorage.removeItem(TOKEN_KEY)
+  storage()?.removeItem(TOKEN_KEY)
 }
 
 function decodePayload(token: string): Record<string, unknown> | null {

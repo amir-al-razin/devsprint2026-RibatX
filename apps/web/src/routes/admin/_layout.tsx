@@ -1,14 +1,13 @@
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router'
-import { getValidToken, isAdmin, clearToken } from '@/lib/auth'
+import { getValidToken, clearToken } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import { useRouter } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/admin/_layout')({
   beforeLoad: () => {
+    if (typeof window === 'undefined') return // SSR: skip, client handles redirect
     const token = getValidToken()
-    if (!token || !isAdmin(token)) {
-      throw redirect({ to: '/login' })
-    }
+    if (!token) throw redirect({ to: '/login' })
   },
   component: AdminLayout,
 })

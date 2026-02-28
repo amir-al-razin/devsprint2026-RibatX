@@ -3,6 +3,7 @@ import { getValidToken, getStudentId, getStudentName } from '@/lib/auth'
 
 export const Route = createFileRoute('/(student)/_layout')({
   beforeLoad: () => {
+    if (typeof window === 'undefined') return // SSR: skip, client handles redirect
     const token = getValidToken()
     if (!token) throw redirect({ to: '/login' })
   },
