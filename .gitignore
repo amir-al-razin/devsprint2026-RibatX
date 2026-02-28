@@ -38,3 +38,4 @@ apps/**/generated
 package-lock.json
 # Prisma generated clients (regenerated via prisma generate in build script)
 apps/*/src/generated
+nohup.out
