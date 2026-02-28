@@ -1,4 +1,4 @@
-import { createFileRoute, useRouter } from '@tanstack/react-router'
+import { createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { useState, useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { identityApi, type ApiError } from '@/lib/api-client'
@@ -19,7 +19,7 @@ export const Route = createFileRoute('/(student)/login')({
     if (typeof window === 'undefined') return // SSR: skip
     // Already logged in → skip the login page
     if (getValidToken()) {
-      throw { redirect: { to: '/' } }
+      throw redirect({ to: '/' })
     }
   },
   component: LoginPage,

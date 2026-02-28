@@ -1,11 +1,11 @@
 /**
  * JWT helpers — client-side only (no signature verification).
- * Tokens live in sessionStorage so they die with the browser tab.
+ * Tokens are persisted in localStorage so they survive tab/browser restarts.
  */
 
 const TOKEN_KEY = 'access_token'
 
-/** Returns sessionStorage on the client, null on the server (SSR). */
+/** Returns localStorage on the client, null on the server (SSR). */
 function storage(): Storage | null {
   return typeof window !== 'undefined' ? localStorage : null
 }
