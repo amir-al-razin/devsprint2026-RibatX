@@ -1,5 +1,5 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { toast } from 'sonner'
 import {
   LineChart,
@@ -53,16 +53,27 @@ interface CachePoint {
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
-const GATEWAY_BASE_URL = env.VITE_GATEWAY_URL ?? 'http://localhost:3000'
-
 function HealthDot({ url, service }: { url: string; service: string }) {
   const data = useMetricsPoller<HealthResponse>(url, 5000)
-  const chaosData = useMetricsPoller<{
-    service: string
-    chaosMode: 'ON' | 'OFF'
-  }>(`${GATEWAY_BASE_URL}/admin/chaos/status?service=${service}`, 3000)
+
+  // Use the typed api-client so the Authorization header is sent when present
+  const [chaosMode, setChaosMode] = useState<'ON' | 'OFF' | null>(null)
+  const pollChaos = useCallback(async () => {
+    try {
+      const result = await gatewayApi.getChaosStatus(service)
+      setChaosMode(result.chaosMode)
+    } catch {
+      // silently ignore — endpoint may not be guarded yet
+    }
+  }, [service])
+  useEffect(() => {
+    pollChaos()
+    const timer = setInterval(pollChaos, 3000)
+    return () => clearInterval(timer)
+  }, [pollChaos])
+
   const ok = data?.status === 'ok'
-  const isChaos = chaosData?.chaosMode === 'ON'
+  const isChaos = chaosMode === 'ON'
   return (
     <div className="flex items-center gap-2">
       <Badge

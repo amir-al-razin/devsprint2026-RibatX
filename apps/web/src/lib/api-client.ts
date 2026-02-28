@@ -118,7 +118,6 @@ export const gatewayApi = {
     request<{ service: string; chaosMode: 'ON' | 'OFF' }>(
       GATEWAY_BASE,
       `/admin/chaos/status?service=${service}`,
-      { skipAuth: true },
     ),
 }
 
