@@ -7,16 +7,16 @@ Turborepo monorepo · 5 NestJS microservices · TanStack Start frontend · Postg
 
 ## Stack
 
-| Layer | Tech |
-|---|---|
-| Frontend | TanStack Start + ShadCN (port 4000) |
-| Gateway | NestJS (port 3000) |
-| Identity | NestJS — JWT auth (port 3001) |
-| Stock | NestJS — inventory (port 3002) |
-| Kitchen | NestJS — BullMQ queue (port 3003) |
-| Notification | NestJS — Socket.io (port 3004) |
-| Database | PostgreSQL 15 — 5 logical DBs |
-| Cache / Queue | Redis |
+| Layer         | Tech                                |
+| ------------- | ----------------------------------- |
+| Frontend      | TanStack Start + ShadCN (port 4000) |
+| Gateway       | NestJS (port 3000)                  |
+| Identity      | NestJS — JWT auth (port 3001)       |
+| Stock         | NestJS — inventory (port 3002)      |
+| Kitchen       | NestJS — BullMQ queue (port 3003)   |
+| Notification  | NestJS — Socket.io (port 3004)      |
+| Database      | PostgreSQL 15 — 5 logical DBs       |
+| Cache / Queue | Redis                               |
 
 ---
 
@@ -52,10 +52,12 @@ pnpm turbo dev
 ```
 
 > **Note — iptables error on first Docker run:**  
-> If you see `iptables: Chain 'DOCKER-ISOLATION-STAGE-2' does not exist`, run:  
+> If you see `iptables: Chain 'DOCKER-ISOLATION-STAGE-2' does not exist`, run:
+>
 > ```bash
 > sudo iptables -N DOCKER-ISOLATION-STAGE-2 && sudo iptables -N DOCKER-ISOLATION-STAGE-1
 > ```
+>
 > Then retry `docker compose up`. This is a one-time fix per reboot on some Linux setups.
 
 ---
@@ -81,6 +83,45 @@ docker compose up --build
 
 ---
 
+## User Accounts
+
+There is no self-registration UI. Accounts are created via the Identity API directly.
+
+### Default demo accounts (seeded automatically)
+
+| Role    | Student ID   | Password    | Notes                        |
+| ------- | ------------ | ----------- | ---------------------------- |
+| Student | `2021331042` | `pass1234`  | Regular student account      |
+| Admin   | `admin001`   | `admin1234` | Access to `/admin` dashboard |
+
+> Admin accounts are controlled by the `ADMIN_STUDENT_IDS` env var (comma-separated). Any student ID listed there receives `role=admin` in their JWT.
+
+### Creating a new student account
+
+```bash
+curl -X POST http://localhost:3001/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"studentId":"2021331099","name":"New Student","password":"pass1234"}'
+```
+
+The account is immediately usable — log in at `http://localhost:4000`.
+
+### Promoting a user to admin
+
+Add their student ID to `ADMIN_STUDENT_IDS` in your `.env` file and restart the identity service:
+
+```env
+ADMIN_STUDENT_IDS=admin001,2021331099
+```
+
+```bash
+docker compose restart identity
+```
+
+They must log out and log back in to get a fresh JWT with the `role=admin` claim.
+
+---
+
 ## Contributing
 
 We use a `main → dev → feat/<name>/<feature>` branch strategy.
@@ -89,6 +130,10 @@ We use a `main → dev → feat/<name>/<feature>` branch strategy.
 # Set your git identity (first time only)
 git config --global user.name "Your Name"
 git config --global user.email "your@email.com"
+
+# Husky git hooks are installed automatically when you run pnpm install.
+# pre-commit: auto-formats staged files with Prettier
+# pre-push:   runs the full test suite — push is blocked if any test fails
 
 # Start a new feature
 git checkout dev
@@ -103,6 +148,7 @@ git push origin dev
 ```
 
 Rules:
+
 - **Never commit directly to `main` or `dev`**
 - All work goes through feature branches
 - `main` is updated only at demo-ready milestones

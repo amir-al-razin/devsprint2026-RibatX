@@ -18,6 +18,22 @@ const config = defineConfig({
     tanstackStart(),
     viteReact(),
   ],
+  server: {
+    proxy: {
+      // /api/* → Order Gateway :3000 (strip /api prefix)
+      '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ''),
+      },
+      // /socket.io/* → Notification Hub :3004 (WebSocket upgrade)
+      '/socket.io': {
+        target: 'http://localhost:3004',
+        changeOrigin: true,
+        ws: true,
+      },
+    },
+  },
 })
 
 export default config

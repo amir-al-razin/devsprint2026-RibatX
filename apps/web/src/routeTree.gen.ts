@@ -9,50 +9,163 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
+import { Route as UnauthorizedRouteImport } from './routes/unauthorized'
+import { Route as AdminLayoutRouteImport } from './routes/admin/_layout'
+import { Route as studentLoginRouteImport } from './routes/(student)/login'
+import { Route as studentLayoutRouteImport } from './routes/(student)/_layout'
+import { Route as AdminLayoutIndexRouteImport } from './routes/admin/_layout/index'
+import { Route as studentLayoutIndexRouteImport } from './routes/(student)/_layout/index'
 
-const IndexRoute = IndexRouteImport.update({
+const UnauthorizedRoute = UnauthorizedRouteImport.update({
+  id: '/unauthorized',
+  path: '/unauthorized',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminLayoutRoute = AdminLayoutRouteImport.update({
+  id: '/admin/_layout',
+  path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const studentLoginRoute = studentLoginRouteImport.update({
+  id: '/(student)/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const studentLayoutRoute = studentLayoutRouteImport.update({
+  id: '/(student)/_layout',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminLayoutIndexRoute = AdminLayoutIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AdminLayoutRoute,
+} as any)
+const studentLayoutIndexRoute = studentLayoutIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => studentLayoutRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
+  '/unauthorized': typeof UnauthorizedRoute
+  '/login': typeof studentLoginRoute
+  '/admin': typeof AdminLayoutRouteWithChildren
+  '/': typeof studentLayoutIndexRoute
+  '/admin/': typeof AdminLayoutIndexRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
+  '/unauthorized': typeof UnauthorizedRoute
+  '/login': typeof studentLoginRoute
+  '/': typeof studentLayoutIndexRoute
+  '/admin': typeof AdminLayoutIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
+  '/unauthorized': typeof UnauthorizedRoute
+  '/(student)/_layout': typeof studentLayoutRouteWithChildren
+  '/(student)/login': typeof studentLoginRoute
+  '/admin/_layout': typeof AdminLayoutRouteWithChildren
+  '/(student)/_layout/': typeof studentLayoutIndexRoute
+  '/admin/_layout/': typeof AdminLayoutIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/unauthorized' | '/login' | '/admin' | '/' | '/admin/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/unauthorized' | '/login' | '/' | '/admin'
+  id:
+    | '__root__'
+    | '/unauthorized'
+    | '/(student)/_layout'
+    | '/(student)/login'
+    | '/admin/_layout'
+    | '/(student)/_layout/'
+    | '/admin/_layout/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
+  UnauthorizedRoute: typeof UnauthorizedRoute
+  studentLayoutRoute: typeof studentLayoutRouteWithChildren
+  studentLoginRoute: typeof studentLoginRoute
+  AdminLayoutRoute: typeof AdminLayoutRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
+    '/unauthorized': {
+      id: '/unauthorized'
+      path: '/unauthorized'
+      fullPath: '/unauthorized'
+      preLoaderRoute: typeof UnauthorizedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/_layout': {
+      id: '/admin/_layout'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminLayoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/(student)/login': {
+      id: '/(student)/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof studentLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/(student)/_layout': {
+      id: '/(student)/_layout'
+      path: ''
+      fullPath: ''
+      preLoaderRoute: typeof studentLayoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/_layout/': {
+      id: '/admin/_layout/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminLayoutIndexRouteImport
+      parentRoute: typeof AdminLayoutRoute
+    }
+    '/(student)/_layout/': {
+      id: '/(student)/_layout/'
       path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof studentLayoutIndexRouteImport
+      parentRoute: typeof studentLayoutRoute
     }
   }
 }
 
+interface studentLayoutRouteChildren {
+  studentLayoutIndexRoute: typeof studentLayoutIndexRoute
+}
+
+const studentLayoutRouteChildren: studentLayoutRouteChildren = {
+  studentLayoutIndexRoute: studentLayoutIndexRoute,
+}
+
+const studentLayoutRouteWithChildren = studentLayoutRoute._addFileChildren(
+  studentLayoutRouteChildren,
+)
+
+interface AdminLayoutRouteChildren {
+  AdminLayoutIndexRoute: typeof AdminLayoutIndexRoute
+}
+
+const AdminLayoutRouteChildren: AdminLayoutRouteChildren = {
+  AdminLayoutIndexRoute: AdminLayoutIndexRoute,
+}
+
+const AdminLayoutRouteWithChildren = AdminLayoutRoute._addFileChildren(
+  AdminLayoutRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
+  UnauthorizedRoute: UnauthorizedRoute,
+  studentLayoutRoute: studentLayoutRouteWithChildren,
+  studentLoginRoute: studentLoginRoute,
+  AdminLayoutRoute: AdminLayoutRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
