@@ -2,7 +2,12 @@ import { createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { useState, useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { identityApi, type ApiError } from '@/lib/api-client'
-import { storeToken, getValidToken } from '@/lib/auth'
+import {
+  storeToken,
+  getValidToken,
+  clearToken,
+  getStudentName,
+} from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -32,6 +37,10 @@ function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [rateLimitCountdown, setRateLimitCountdown] = useState(0)
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Client-side: detect already-authenticated state (covers SSR hydration gap)
+  const existingToken = typeof window !== 'undefined' ? getValidToken() : null
+  const existingName = existingToken ? getStudentName(existingToken) : null
 
   // Clear countdown timer on unmount
   useEffect(() => {
@@ -78,7 +87,44 @@ function LoginPage() {
     }
   }
 
+  function handleSignOut() {
+    clearToken()
+    router.navigate({ to: '/login', replace: true })
+  }
+
   const isRateLimited = rateLimitCountdown > 0
+
+  // Already authenticated — show a "signed in" card instead of the form
+  if (existingToken) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <Card className="w-full max-w-sm">
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl">🍽️ IUT Cafeteria</CardTitle>
+            <CardDescription>
+              You&apos;re already signed in
+              {existingName ? ` as ${existingName}` : ''}.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <Button
+              className="w-full"
+              onClick={() => router.navigate({ to: '/' })}
+            >
+              Go to Dashboard
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={handleSignOut}
+            >
+              Sign out
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">

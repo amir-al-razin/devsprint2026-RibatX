@@ -12,7 +12,8 @@ export const Route = createFileRoute('/admin/_layout')({
   beforeLoad: () => {
     if (typeof window === 'undefined') return // SSR: skip, client handles redirect
     const token = getValidToken()
-    if (!token || !isAdmin(token)) throw redirect({ to: '/login' })
+    if (!token) throw redirect({ to: '/login' })
+    if (!isAdmin(token)) throw redirect({ to: '/unauthorized' })
   },
   component: AdminLayout,
 })
@@ -24,8 +25,10 @@ function AdminLayout() {
   // Guards initial hard-load / refresh — beforeLoad only fires on client-side navigation
   useEffect(() => {
     const token = getValidToken()
-    if (!token || !isAdmin(token)) {
+    if (!token) {
       router.navigate({ to: '/login', replace: true })
+    } else if (!isAdmin(token)) {
+      router.navigate({ to: '/unauthorized', replace: true })
     } else {
       setChecking(false)
     }
