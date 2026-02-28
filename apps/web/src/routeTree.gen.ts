@@ -9,22 +9,12 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as AdminIndexRouteImport } from './routes/admin/index'
-import { Route as studentIndexRouteImport } from './routes/(student)/index'
 import { Route as AdminLayoutRouteImport } from './routes/admin/_layout'
 import { Route as studentLoginRouteImport } from './routes/(student)/login'
 import { Route as studentLayoutRouteImport } from './routes/(student)/_layout'
+import { Route as AdminLayoutIndexRouteImport } from './routes/admin/_layout/index'
+import { Route as studentLayoutIndexRouteImport } from './routes/(student)/_layout/index'
 
-const AdminIndexRoute = AdminIndexRouteImport.update({
-  id: '/admin/',
-  path: '/admin/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const studentIndexRoute = studentIndexRouteImport.update({
-  id: '/(student)/',
-  path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AdminLayoutRoute = AdminLayoutRouteImport.update({
   id: '/admin/_layout',
   path: '/admin',
@@ -39,64 +29,58 @@ const studentLayoutRoute = studentLayoutRouteImport.update({
   id: '/(student)/_layout',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminLayoutIndexRoute = AdminLayoutIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminLayoutRoute,
+} as any)
+const studentLayoutIndexRoute = studentLayoutIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => studentLayoutRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/login': typeof studentLoginRoute
-  '/admin': typeof AdminLayoutRoute
-  '/': typeof studentIndexRoute
-  '/admin/': typeof AdminIndexRoute
+  '/admin': typeof AdminLayoutRouteWithChildren
+  '/': typeof studentLayoutIndexRoute
+  '/admin/': typeof AdminLayoutIndexRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof studentLoginRoute
-  '/admin': typeof AdminIndexRoute
-  '/': typeof studentIndexRoute
+  '/': typeof studentLayoutIndexRoute
+  '/admin': typeof AdminLayoutIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/(student)/_layout': typeof studentLayoutRoute
+  '/(student)/_layout': typeof studentLayoutRouteWithChildren
   '/(student)/login': typeof studentLoginRoute
-  '/admin/_layout': typeof AdminLayoutRoute
-  '/(student)/': typeof studentIndexRoute
-  '/admin/': typeof AdminIndexRoute
+  '/admin/_layout': typeof AdminLayoutRouteWithChildren
+  '/(student)/_layout/': typeof studentLayoutIndexRoute
+  '/admin/_layout/': typeof AdminLayoutIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths: '/login' | '/admin' | '/' | '/admin/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/login' | '/admin' | '/'
+  to: '/login' | '/' | '/admin'
   id:
     | '__root__'
     | '/(student)/_layout'
     | '/(student)/login'
     | '/admin/_layout'
-    | '/(student)/'
-    | '/admin/'
+    | '/(student)/_layout/'
+    | '/admin/_layout/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  studentLayoutRoute: typeof studentLayoutRoute
+  studentLayoutRoute: typeof studentLayoutRouteWithChildren
   studentLoginRoute: typeof studentLoginRoute
-  AdminLayoutRoute: typeof AdminLayoutRoute
-  studentIndexRoute: typeof studentIndexRoute
-  AdminIndexRoute: typeof AdminIndexRoute
+  AdminLayoutRoute: typeof AdminLayoutRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/admin/': {
-      id: '/admin/'
-      path: '/admin'
-      fullPath: '/admin/'
-      preLoaderRoute: typeof AdminIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/(student)/': {
-      id: '/(student)/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof studentIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/admin/_layout': {
       id: '/admin/_layout'
       path: '/admin'
@@ -118,15 +102,51 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof studentLayoutRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/_layout/': {
+      id: '/admin/_layout/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminLayoutIndexRouteImport
+      parentRoute: typeof AdminLayoutRoute
+    }
+    '/(student)/_layout/': {
+      id: '/(student)/_layout/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof studentLayoutIndexRouteImport
+      parentRoute: typeof studentLayoutRoute
+    }
   }
 }
 
+interface studentLayoutRouteChildren {
+  studentLayoutIndexRoute: typeof studentLayoutIndexRoute
+}
+
+const studentLayoutRouteChildren: studentLayoutRouteChildren = {
+  studentLayoutIndexRoute: studentLayoutIndexRoute,
+}
+
+const studentLayoutRouteWithChildren = studentLayoutRoute._addFileChildren(
+  studentLayoutRouteChildren,
+)
+
+interface AdminLayoutRouteChildren {
+  AdminLayoutIndexRoute: typeof AdminLayoutIndexRoute
+}
+
+const AdminLayoutRouteChildren: AdminLayoutRouteChildren = {
+  AdminLayoutIndexRoute: AdminLayoutIndexRoute,
+}
+
+const AdminLayoutRouteWithChildren = AdminLayoutRoute._addFileChildren(
+  AdminLayoutRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
-  studentLayoutRoute: studentLayoutRoute,
+  studentLayoutRoute: studentLayoutRouteWithChildren,
   studentLoginRoute: studentLoginRoute,
-  AdminLayoutRoute: AdminLayoutRoute,
-  studentIndexRoute: studentIndexRoute,
-  AdminIndexRoute: AdminIndexRoute,
+  AdminLayoutRoute: AdminLayoutRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
