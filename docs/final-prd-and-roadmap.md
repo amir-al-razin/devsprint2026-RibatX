@@ -753,7 +753,7 @@ jobs:
 
 ---
 
-### Day 7 — Integration, Polish & Cloud Deployment
+### Day 7 — Integration, Polish & Cloud Deployment ✅ COMPLETE
 
 **Goal:** The system is production-ready, fully integrated, and deployed to Railway.
 
@@ -761,11 +761,11 @@ jobs:
 
 **Integration & Bug Fixes:**
 
-- [ ] Full end-to-end test of the happy path (login → order → kitchen → ready)
-- [ ] Test chaos scenarios: kill Stock Service → Gateway serves cached data with warning
-- [ ] Test rate limiting: 4th login attempt in 1 minute → 429
-- [ ] Test optimistic locking: simulate concurrent orders exceeding stock
-- [ ] Verify CI pipeline passes on a fresh push
+- [x] Full end-to-end test of the happy path (login → order → kitchen → ready)
+- [x] Test chaos scenarios: kill Stock Service → Gateway serves cached data with warning
+- [x] Test rate limiting: 4th login attempt in 1 minute → 429
+- [x] Test optimistic locking: simulate concurrent orders exceeding stock
+- [x] Verify CI pipeline passes on a fresh push
 
 **Railway Deployment:**
 
@@ -777,38 +777,38 @@ jobs:
 
 **README.md:**
 
-- [ ] Prerequisites (Docker, pnpm)
-- [ ] `docker compose up` quick-start instructions
-- [ ] Service port map
-- [ ] Default credentials for demo (test student ID)
-- [ ] Admin Dashboard URL
+- [x] Prerequisites (Docker, pnpm)
+- [x] `docker compose up` quick-start instructions
+- [x] Service port map
+- [x] Default credentials for demo (test student ID)
+- [x] Admin Dashboard URL
 - [ ] Railway deployment URL (if done)
 
 **Final Polish:**
 
-- [ ] Ensure all services log meaningful messages (startup, errors, order processing)
-- [ ] Remove hardcoded secrets, use `.env.example`
-- [ ] Add loading states and error boundaries in both route groups
-- [ ] Verify the submission checklist from the problem statement
+- [x] Ensure all services log meaningful messages (startup, errors, order processing)
+- [x] Remove hardcoded secrets, use `.env.example`
+- [x] Add loading states and error boundaries in both route groups
+- [x] Verify the submission checklist from the problem statement
 
 ---
 
 ### Submission Checklist
 
-- [ ] `docker compose up` starts the entire system from scratch
-- [ ] Student can register, login, place order, see real-time status
-- [ ] Gateway returns `401` for unauthenticated requests
-- [ ] Cache blocks requests when stock is `0`
-- [ ] Orders are processed asynchronously (< 2s acknowledgment)
-- [ ] WebSocket pushes status updates without polling
-- [ ] All services expose `/health` and `/metrics`
-- [ ] Admin Dashboard shows live health grid and metrics
-- [ ] Chaos Toggle demonstrates graceful degradation
-- [ ] Unit tests for Gateway (order validation) and Stock (deduction) pass
-- [ ] GitHub Actions CI runs on push to `main` and fails on broken tests
-- [ ] **Bonus:** Rate limiting (429 on 4th login attempt)
-- [ ] **Bonus:** Latency alert flashes red when Gateway > 1s average
-- [ ] **Bonus:** Cache Hit vs DB Hit graph visible on Admin Dashboard
+- [x] `docker compose up` starts the entire system from scratch
+- [x] Student can register, login, place order, see real-time status
+- [x] Gateway returns `401` for unauthenticated requests
+- [x] Cache blocks requests when stock is `0`
+- [x] Orders are processed asynchronously (< 2s acknowledgment)
+- [x] WebSocket pushes status updates without polling
+- [x] All services expose `/health` and `/metrics`
+- [x] Admin Dashboard shows live health grid and metrics
+- [x] Chaos Toggle demonstrates graceful degradation
+- [x] Unit tests for Gateway (order validation) and Stock (deduction) pass
+- [x] GitHub Actions CI runs on push to `main` and fails on broken tests
+- [x] **Bonus:** Rate limiting (429 on 4th login attempt)
+- [x] **Bonus:** Latency alert flashes red when Gateway > 1s average
+- [x] **Bonus:** Cache Hit vs DB Hit graph visible on Admin Dashboard
 - [ ] **Bonus:** Deployed to Railway with live URL in README
 
 ---
