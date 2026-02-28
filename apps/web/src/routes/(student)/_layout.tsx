@@ -4,7 +4,13 @@ import {
   redirect,
   useRouter,
 } from '@tanstack/react-router'
-import { getValidToken, getStudentId, getStudentName } from '@/lib/auth'
+import {
+  getValidToken,
+  getStudentId,
+  getStudentName,
+  clearToken,
+} from '@/lib/auth'
+import { Button } from '@/components/ui/button'
 import { useEffect, useState } from 'react'
 
 export const Route = createFileRoute('/(student)/_layout')({
@@ -30,6 +36,11 @@ function StudentLayout() {
     }
   }, [router])
 
+  function handleLogout() {
+    clearToken()
+    router.navigate({ to: '/login' })
+  }
+
   const token = getValidToken()
   const name = token ? getStudentName(token) : null
   const studentId = token ? getStudentId(token) : null
@@ -40,11 +51,16 @@ function StudentLayout() {
     <div className="min-h-screen bg-background">
       <header className="border-b px-6 py-3 flex items-center justify-between">
         <span className="font-semibold text-sm">🍽️ IUT Cafeteria</span>
-        {name && (
-          <span className="text-sm text-muted-foreground">
-            {name} <span className="text-xs opacity-50">({studentId})</span>
-          </span>
-        )}
+        <div className="flex items-center gap-3">
+          {name && (
+            <span className="text-sm text-muted-foreground">
+              {name} <span className="text-xs opacity-50">({studentId})</span>
+            </span>
+          )}
+          <Button variant="ghost" size="sm" onClick={handleLogout}>
+            Sign out
+          </Button>
+        </div>
       </header>
       <main className="p-6">
         <Outlet />
