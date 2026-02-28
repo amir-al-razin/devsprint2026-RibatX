@@ -741,7 +741,7 @@ jobs:
 
 **`(admin)` Route Group:**
 
-- [x] `_layout.tsx`: JWT presence check → redirect if absent/expired; SSR guard added (role claim not present in JWT — token existence check used instead)
+- [x] `_layout.tsx`: JWT role-based guard → redirect to `/login` if token absent/expired **or** if `role` claim ≠ `"admin"`; SSR guard added (role claim is present in JWT — `isAdmin()` decodes the payload and checks `payload.role === "admin"`)
 - [x] `index.tsx` (Admin Dashboard):
   - Health Grid: poll all 5 service `/health` endpoints every 5s; Green/Red + pulsing **CHAOS** badge per service
   - Metrics Panel: poll Gateway `/metrics` every 3s using `useMetricsPoller`; displayed in ShadCN `<Card>` widgets
