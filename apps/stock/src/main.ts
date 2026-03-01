@@ -4,16 +4,14 @@ import { AppModule } from './app.module';
 import { PrismaClient } from './generated/prisma';
 
 async function seedItems(prisma: PrismaClient) {
-  const count = await prisma.item.count();
-  if (count === 0) {
-    await prisma.item.createMany({
-      data: [
-        { name: 'Iftar Box', quantity: 100 },
-        { name: 'Drinko', quantity: 50 },
-        { name: 'Doctor Laban', quantity: 75 },
-      ],
-    });
-    console.log('[stock] Seeded 3 default menu items');
+  // Ensure there is exactly one "Iftar Box" item.
+  const existing = await prisma.item.findFirst({
+    where: { name: 'Iftar Box' },
+  });
+  if (!existing) {
+    await prisma.item.deleteMany();
+    await prisma.item.create({ data: { name: 'Iftar Box', quantity: 100 } });
+    console.log('[stock] Initialised single Iftar Box item (qty: 100)');
   }
 }
 

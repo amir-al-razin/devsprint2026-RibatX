@@ -72,6 +72,18 @@ export class StockService {
     }
   }
 
+  async restock(quantity: number) {
+    const item = await this.prisma.item.findFirst();
+    if (!item) throw new NotFoundException('No item found');
+    const updated = await this.prisma.item.update({
+      where: { id: item.id },
+      data: { quantity, version: item.version + 1 },
+    });
+    // Invalidate Redis cache so gateway picks up new quantity immediately
+    await this.redis.set(`stock:${item.id}`, quantity);
+    return { id: updated.id, name: updated.name, quantity: updated.quantity };
+  }
+
   async getItems() {
     return this.prisma.item.findMany();
   }
