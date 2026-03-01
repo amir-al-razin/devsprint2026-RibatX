@@ -8,8 +8,17 @@ import { TerminusModule } from '@nestjs/terminus';
 import { OrdersProcessor } from './orders.processor';
 import { HealthModule } from './health/health.module';
 
+import { RedisModule } from '@nestjs-modules/ioredis';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { MetricsModule } from './metrics/metrics.module';
+import { MetricsInterceptor } from './common/interceptors/metrics.interceptor';
+
 @Module({
   imports: [
+    RedisModule.forRoot({
+      type: 'single',
+      url: process.env.REDIS_URL || 'redis://localhost:6379',
+    }),
     BullModule.forRoot({
       connection: (() => {
         const url = new URL(process.env.REDIS_URL || 'redis://localhost:6379');
@@ -27,8 +36,16 @@ import { HealthModule } from './health/health.module';
     }),
     TerminusModule,
     HealthModule,
+    MetricsModule,
   ],
   controllers: [AppController, QueueController],
-  providers: [AppService, OrdersProcessor],
+  providers: [
+    AppService,
+    OrdersProcessor,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: MetricsInterceptor,
+    },
+  ],
 })
 export class AppModule {}

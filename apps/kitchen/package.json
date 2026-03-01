@@ -20,6 +20,7 @@
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
+    "@nestjs-modules/ioredis": "^2.0.2",
     "@nestjs/bullmq": "^11.0.4",
     "@nestjs/common": "^11.0.1",
     "@nestjs/core": "^11.0.1",
@@ -28,6 +29,7 @@
     "@ribatx/types": "workspace:*",
     "axios": "^1.13.5",
     "bullmq": "^5.70.1",
+    "ioredis": "^5.4.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"
   },

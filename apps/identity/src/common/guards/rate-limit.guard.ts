@@ -1,4 +1,10 @@
-import { Injectable, CanActivate, ExecutionContext, HttpException, HttpStatus } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
 
@@ -10,10 +16,6 @@ export class RateLimitGuard implements CanActivate {
     const request = context.switchToHttp().getRequest();
     const studentId = request.body.studentId;
 
-    if (!studentId) {
-      return true; // Let the DTO validation handle missing studentId
-    }
-
     const key = `rate_limit:login:${studentId}`;
     const attempts = await this.redis.incr(key);
 
@@ -22,7 +24,10 @@ export class RateLimitGuard implements CanActivate {
     }
 
     if (attempts > 3) {
-      throw new HttpException('Too many login attempts. Try again in 60s.', HttpStatus.TOO_MANY_REQUESTS);
+      throw new HttpException(
+        'Too many login attempts. Try again in 60s.',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
     }
 
     return true;

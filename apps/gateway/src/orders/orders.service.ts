@@ -29,7 +29,11 @@ export class OrdersService {
     }
   }
 
-  async createOrder(studentId: string, itemId: string) {
+  async createOrder(
+    studentId: string,
+    itemId: string,
+    idempotencyKey?: string,
+  ) {
     // 0. Chaos-mode gates
     await this.assertNoChaos('gateway');
     await this.assertNoChaos('stock');
@@ -64,11 +68,22 @@ export class OrdersService {
         itemId,
       });
 
-      return {
+      const orderResponse = {
         orderId,
         status: 'PENDING',
         message: 'Order received and sent to kitchen',
       };
+
+      if (idempotencyKey) {
+        await this.redis.set(
+          `idempotency:${idempotencyKey}`,
+          JSON.stringify(orderResponse),
+          'EX',
+          3600,
+        );
+      }
+
+      return orderResponse;
     } catch (error) {
       // Re-throw chaos / conflict exceptions as-is
       if (

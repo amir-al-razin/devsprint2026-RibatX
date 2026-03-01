@@ -6,6 +6,10 @@ import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { HealthModule } from './health/health.module';
 
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { MetricsModule } from './metrics/metrics.module';
+import { MetricsInterceptor } from './common/interceptors/metrics.interceptor';
+
 @Module({
   imports: [
     RedisModule.forRoot({
@@ -15,8 +19,15 @@ import { HealthModule } from './health/health.module';
     PrismaModule,
     AuthModule,
     HealthModule,
+    MetricsModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: MetricsInterceptor,
+    },
+  ],
 })
 export class AppModule {}

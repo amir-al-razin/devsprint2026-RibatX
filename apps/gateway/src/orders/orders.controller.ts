@@ -10,6 +10,11 @@ export class OrdersController {
   @UseGuards(JwtAuthGuard, IdempotencyGuard)
   @Post()
   createOrder(@Req() req: any, @Body('itemId') itemId: string) {
-    return this.ordersService.createOrder(req.user.studentId, itemId);
+    const idempotencyKey = req.headers['x-idempotency-key'];
+    return this.ordersService.createOrder(
+      req.user.studentId,
+      itemId,
+      idempotencyKey,
+    );
   }
 }

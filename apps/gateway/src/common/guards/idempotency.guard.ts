@@ -23,16 +23,20 @@ export class IdempotencyGuard implements CanActivate {
     const result = await this.redis.get(key);
 
     if (result) {
-      // If we have a cached result, return it (mocking the actual response here)
-      // In a real scenario, you'd store the actual response body.
-      throw new ConflictException({
-        message: 'Duplicate request detected (Idempotent)',
-        cachedResult: JSON.parse(result),
-      });
+      const parsed = JSON.parse(result);
+      if (parsed.status === 'PROCESSING') {
+        throw new ConflictException('Request is still being processed');
+      }
+      return parsed; // Return the actual cached response
     }
 
     // Lock it temporarily (the actual service will update it with the result)
-    await this.redis.set(key, JSON.stringify({ status: 'PROCESSING' }), 'EX', 3600);
+    await this.redis.set(
+      key,
+      JSON.stringify({ status: 'PROCESSING' }),
+      'EX',
+      3600,
+    );
 
     return true;
   }
