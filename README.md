@@ -99,7 +99,7 @@ There is no self-registration UI. Accounts are created via the Identity API dire
 ### Creating a new student account
 
 ```bash
-curl -X POST http://localhost:3001/auth/register \
+curl -X POST https://identity-production-08d3.up.railway.app/auth/register \
   -H "Content-Type: application/json" \
   -d '{"studentId":"2021331099","name":"New Student","password":"pass1234"}'
 ```

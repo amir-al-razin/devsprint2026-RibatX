@@ -2,8 +2,21 @@
 
 **Project:** DevSprint 2026 — IUT Cafeteria Distributed System
 **Team:** RibatX
-**Version:** 2.0 (Final)
-**Status:** Ready for Implementation
+**Version:** 3.0 (Gap Analysis + Fix Roadmap added March 1, 2026)
+**Status:** ✅ All systems deployed and operational on Railway
+
+## 🚀 Live Production URLs
+
+| Service              | URL                                                 |
+| -------------------- | --------------------------------------------------- |
+| **Web App**          | https://web-production-121cd.up.railway.app         |
+| Gateway API          | https://gateway-production-3aa4.up.railway.app      |
+| Identity Service     | https://identity-production-08d3.up.railway.app     |
+| Stock Service        | https://stock-production-a6ec.up.railway.app        |
+| Kitchen Service      | https://kitchen-production-847a.up.railway.app      |
+| Notification Service | https://notification-production-e374.up.railway.app |
+
+> **Deploy note:** Railway is triggered via `railway up -s <service>` (not GitHub webhook). After code changes: `git push origin dev`, merge to `main`, then run `railway up -d -s gateway && railway up -d -s kitchen` (or other affected services).
 
 ---
 
@@ -810,6 +823,328 @@ jobs:
 - [x] **Bonus:** Latency alert flashes red when Gateway > 1s average
 - [x] **Bonus:** Cache Hit vs DB Hit graph visible on Admin Dashboard
 - [ ] **Bonus:** Deployed to Railway with live URL in README
+
+---
+
+## Part 3: Implementation Gap Analysis & Fix Roadmap
+
+**Version:** 3.0 (Added March 1, 2026 — post-review)
+**Context:** Railway deployment is currently in progress. Fixes below are ordered to avoid disrupting the live deployment. Start from Fix 1 (pure backend, no Docker/Railway impact) and work forward.
+
+---
+
+### Gap Analysis: PRD vs. Current Codebase
+
+| PRD Requirement                                             | Location in PRD               | Status in Code                                      | Impact                                                              |
+| ----------------------------------------------------------- | ----------------------------- | --------------------------------------------------- | ------------------------------------------------------------------- |
+| `order_db`: Order record saved on `POST /orders`            | §5.2 Order Flow step 5        | ❌ No Prisma schema in gateway, no DB write         | Orders lost if Redis flushes; `GET /orders/:id` returns nothing     |
+| `X-Idempotency-Key` stored in `order_db`                    | §5.2 Responsibilities         | ⚠️ Stored in Redis only                             | Acceptable for speed, but volatile — lost on Redis restart          |
+| Duplicate key returns cached response (not error)           | §5.2 Order Flow step 2, Day 4 | ❌ Guard throws `ConflictException`                 | Student gets error 409 on retry instead of their original `orderId` |
+| `OrdersService` writes real response to Redis after success | Day 4 idempotency task        | ❌ Never updated — stays `{ status: 'PROCESSING' }` | Even if guard is fixed, it would return stale PROCESSING state      |
+| Kitchen updates order status in `kitchen_db`                | §5.4 Worker Logic             | ❌ No Prisma in kitchen at all                      | No audit trail of order state transitions                           |
+| `notify_db` for Notification Hub                            | §5.5                          | ❌ No DB in notification                            | No notification history                                             |
+| Rate limit blocks missing `studentId` payloads              | §9, §5.1                      | ❌ Guard returns `true` if `studentId` absent       | Brute-force bypass possible                                         |
+| `POST /admin/chaos` requires Admin JWT                      | §5.2 Endpoints table          | ❌ No auth guard on chaos controller                | Anyone can toggle chaos without logging in                          |
+| NestJS services have Docker healthchecks                    | §7 "all with healthchecks"    | ❌ Only postgres + redis have healthchecks          | Services may start before dependencies are truly ready              |
+| CI lint blocks the build on failure                         | §10 CI Pipeline               | ❌ `continue-on-error: true` on lint step           | Lint errors never fail the build                                    |
+| Railway: Web container uses public service URLs             | §11 Cloud Deployment          | ❌ `VITE_*` baked as `http://localhost:PORT`        | Frontend cannot reach backend when deployed on Railway              |
+
+---
+
+### Fix 1 — Gateway: Add `order_db` Persistence _(Start here)_
+
+**What the PRD says:** §5.2 step 5 — "Persist Order record (status: PENDING)" in `order_db`.
+**What exists now:** Gateway has `DATABASE_URL` env var set but no Prisma schema, no DB module, no writes.
+**Railway impact:** None — this is purely additive backend code.
+
+**Files to create / edit:**
+
+1. **Create `apps/gateway/prisma/schema.prisma`**
+
+   ```prisma
+   generator client {
+     provider = "prisma-client-js"
+     output   = "../src/generated/prisma"
+   }
+
+   datasource db {
+     provider = "postgresql"
+     url      = env("DATABASE_URL")
+   }
+
+   model Order {
+     id             String   @id
+     studentId      String
+     itemId         String
+     status         String   @default("PENDING")
+     idempotencyKey String?  @unique
+     response       Json?
+     createdAt      DateTime @default(now())
+     updatedAt      DateTime @updatedAt
+   }
+   ```
+
+2. **Run in `apps/gateway`:**
+
+   ```bash
+   pnpm prisma generate
+   ```
+
+3. **Create `apps/gateway/src/prisma/prisma.service.ts`** — standard NestJS `PrismaService` (same pattern as `apps/identity`)
+
+4. **Create `apps/gateway/src/prisma/prisma.module.ts`** — export `PrismaService`
+
+5. **Edit `apps/gateway/src/app.module.ts`** — import `PrismaModule`
+
+6. **Edit `apps/gateway/src/orders/orders.service.ts`:**
+   - Inject `PrismaService`
+   - After `kitchenQueue.add(...)`, call `prisma.order.create({ data: { id: orderId, studentId, itemId, status: 'PENDING' } })`
+
+7. **Edit `apps/gateway/Dockerfile`:**
+   - Copy prisma schema in builder stage (same pattern as `apps/identity/Dockerfile`)
+   - Change `CMD` to: `sh -c "npx prisma db push --schema=prisma/schema.prisma --skip-generate && node dist/main.js"`
+
+**Test after fix:**
+
+```bash
+# Place an order, then check the DB
+docker exec -it ribatx_postgres psql -U postgres -d order_db -c "SELECT * FROM \"Order\";"
+```
+
+---
+
+### Fix 2 — Gateway: Repair Idempotency Guard
+
+**What the PRD says:** §5.2 — "duplicate key: return the cached response without re-processing".
+**What exists now:** Guard throws `ConflictException` (HTTP 409) instead of returning the original success response. Also, `OrdersService` never writes the real response to Redis, so the cached value is always `{ status: 'PROCESSING' }`.
+**Railway impact:** None — no infrastructure changes.
+
+**Two parts to fix:**
+
+**Part A — `apps/gateway/src/orders/orders.service.ts`:**
+
+After a successful order (after `kitchenQueue.add`), write the real response to Redis:
+
+```typescript
+const responsePayload = { orderId, status: 'PENDING', message: 'Order received and sent to kitchen' };
+
+// Write real response for idempotency
+const idempotencyKey = /* pass this in from the guard context */;
+if (idempotencyKey) {
+  await this.redis.set(`idempotency:${idempotencyKey}`, JSON.stringify(responsePayload), 'EX', 86400);
+}
+
+return responsePayload;
+```
+
+The cleanest way: add a custom decorator `@IdempotencyKey()` that extracts the header and passes it to the service, or use a request-scoped approach.
+
+**Part B — `apps/gateway/src/common/guards/idempotency.guard.ts`:**
+
+Replace the `throw new ConflictException` block with returning the cached response directly from the guard by attaching it to the request and using a response interceptor, **or** simpler: attach the cached result to `request.idempotentResponse` and check in the controller:
+
+```typescript
+if (result) {
+  const response = context.switchToHttp().getResponse();
+  response.status(200).json(JSON.parse(result)); // return the original success response
+  return false; // stop the handler from running
+}
+```
+
+**Test after fix:**
+
+```bash
+# Same idempotency key twice → both return 202 with same orderId
+curl -X POST http://localhost:3000/orders \
+  -H "Authorization: Bearer <token>" \
+  -H "X-Idempotency-Key: test-key-abc" \
+  -H "Content-Type: application/json" \
+  -d '{"itemId":"<id>"}'
+
+# Second call with same key → should return 200 with same orderId, not 409
+curl -X POST http://localhost:3000/orders \
+  -H "Authorization: Bearer <token>" \
+  -H "X-Idempotency-Key: test-key-abc" \
+  -H "Content-Type: application/json" \
+  -d '{"itemId":"<id>"}'
+```
+
+---
+
+### Fix 3 — Identity: Harden Rate Limit Guard
+
+**What the PRD says:** §5.1 §9 — "3 login attempts per minute per student ID".
+**What exists now:** Guard at line 12 returns `true` (skips limit) if `studentId` is absent from body.
+**Railway impact:** None.
+
+**Edit `apps/identity/src/common/guards/rate-limit.guard.ts`:**
+
+```typescript
+const studentId = request.body?.studentId;
+
+// If studentId is missing, reject — let DTO validation handle the 400,
+// but fall back to IP-based limiting to prevent anonymous flooding
+const identifier = studentId || request.ip || "unknown";
+
+const key = `rate_limit:login:${identifier}`;
+```
+
+Additionally, remove the early `return true` and always run the rate limit check, even for malformed requests. The DTO validation will still fire after and return a proper 400.
+
+**Test after fix:**
+
+```bash
+# Send 4 requests without studentId → should get 429, not 400
+for i in 1 2 3 4; do
+  curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:3001/auth/login \
+    -H "Content-Type: application/json" -d '{}'
+done
+# Expected: 400 400 400 429
+```
+
+---
+
+### Fix 4 — Gateway: Add Admin JWT Guard to Chaos Endpoint
+
+**What the PRD says:** §5.2 Endpoints table — `POST /admin/chaos` requires `Admin JWT`.
+**What exists now:** `chaos.controller.ts` has no `@UseGuards` decorator — anyone can call it.
+**Railway impact:** None.
+
+**Edit `apps/gateway/src/chaos.controller.ts`:**
+
+```typescript
+@UseGuards(JwtAuthGuard, AdminGuard)
+@Post('admin/chaos')
+```
+
+Create `apps/gateway/src/auth/admin.guard.ts`:
+
+```typescript
+@Injectable()
+export class AdminGuard implements CanActivate {
+  canActivate(context: ExecutionContext): boolean {
+    const request = context.switchToHttp().getRequest();
+    return request.user?.role === "admin";
+  }
+}
+```
+
+---
+
+### Fix 5 — Kitchen: Order Status Updates
+
+**What the PRD says:** §5.4 Worker Logic — "Update order status → IN_KITCHEN ... Update order status → READY".
+**What exists now:** Kitchen fires HTTP notifications but does not update any order record.
+**Railway impact:** None. But this fix pairs with Fix 1 (gateway creates the Order row first).
+
+**Approach:** Kitchen calls back to Gateway to update the order status, OR Gateway exposes an internal `PATCH /orders/:id/status` endpoint. The simpler approach for the hackathon:
+
+**Option A (recommended — no new DB in Kitchen):**
+Add an internal `PATCH /orders/:id/status` endpoint to the Gateway and have Kitchen call it:
+
+- Add to `apps/gateway/src/orders/orders.controller.ts`:
+  ```typescript
+  @Patch(':id/status')
+  updateStatus(@Param('id') id: string, @Body('status') status: string) {
+    return this.ordersService.updateStatus(id, status);
+  }
+  ```
+- Update `apps/gateway/src/orders/orders.service.ts`:
+  ```typescript
+  async updateStatus(id: string, status: string) {
+    return this.prisma.order.update({ where: { id }, data: { status } });
+  }
+  ```
+- Update `apps/kitchen/src/orders.processor.ts` to call `PATCH http://gateway:3000/orders/${orderId}/status` (in addition to the notification call).
+
+**Option B (full `kitchen_db`):**
+Add a `KitchenJob` Prisma model to kitchen — heavier, only if judges specifically check `kitchen_db`. Not recommended for remaining hackathon time.
+
+---
+
+### Fix 6 — Docker: Add NestJS Service Healthchecks
+
+**What the PRD says:** §7 "all with healthchecks configured".
+**What exists now:** Only `postgres` and `redis` have `healthcheck:` blocks. All 5 NestJS services have none.
+**Railway impact:** Railway ignores `healthcheck` in Compose but uses its own restart logic — this is safe to add.
+
+**Edit `docker-compose.yml` — add to each NestJS service block:**
+
+```yaml
+healthcheck:
+  test: ["CMD-SHELL", "wget -qO- http://localhost:<PORT>/health || exit 1"]
+  interval: 10s
+  timeout: 5s
+  retries: 5
+  start_period: 30s
+```
+
+Use the correct port per service (3000/3001/3002/3003/3004). Then update all NestJS service `depends_on` blocks to add `condition: service_healthy` for their upstream services where applicable.
+
+---
+
+### Fix 7 — CI: Remove `continue-on-error` from Lint Step
+
+**What the PRD says:** §10 — "Fail the build if any test fails". Lint failures should also fail the build.
+**What exists now:** `.github/workflows/ci.yml` has `continue-on-error: true` on the lint step, meaning lint never fails CI.
+**Railway impact:** None — Railway doesn't use CI directly.
+
+**Edit `.github/workflows/ci.yml`:**
+
+Remove the line:
+
+```yaml
+continue-on-error: true # ← delete this line
+```
+
+Also consider adding a `prisma generate` step before build so Prisma-typed services compile correctly in CI:
+
+```yaml
+- name: Generate Prisma clients
+  run: pnpm turbo run db:generate --filter="./apps/*"
+```
+
+(Requires adding a `db:generate` script to each service's `package.json` that runs `prisma generate`.)
+
+---
+
+### Fix 8 — Railway: Fix Frontend Public URLs _(Unblock after Railway deploy is stable)_
+
+**What the PRD says:** §11 Cloud Deployment — deployed to Railway with live URL.
+**What exists now:** `docker-compose.yml` bakes `http://localhost:PORT` as `VITE_*` build args into the web image. These work in local Docker but break on Railway because end users' browsers can't reach the Railway container's `localhost`.
+**Railway impact:** This IS the Railway fix — do not apply until the Railway project is configured and public URLs are known.
+
+**Edit `docker-compose.yml` web service build args:**
+
+```yaml
+web:
+  build:
+    args:
+      VITE_GATEWAY_URL: ${PUBLIC_GATEWAY_URL:-http://localhost:3000}
+      VITE_IDENTITY_URL: ${PUBLIC_IDENTITY_URL:-http://localhost:3001}
+      VITE_STOCK_URL: ${PUBLIC_STOCK_URL:-http://localhost:3002}
+      VITE_KITCHEN_URL: ${PUBLIC_KITCHEN_URL:-http://localhost:3003}
+      VITE_NOTIFICATION_URL: ${PUBLIC_NOTIFICATION_URL:-http://localhost:3004}
+```
+
+Then in Railway dashboard, set `PUBLIC_GATEWAY_URL`, `PUBLIC_IDENTITY_URL`, etc. to the actual Railway-assigned public URLs for each service. Local Docker continues to work using the `localhost` defaults.
+
+---
+
+### Fix Summary & Execution Order
+
+| #   | Fix                                  | Touches                                                                    | Safe with Railway Live?        | Time Estimate |
+| --- | ------------------------------------ | -------------------------------------------------------------------------- | ------------------------------ | ------------- |
+| 1   | Gateway order persistence (order_db) | `apps/gateway/prisma/`, `orders.service.ts`, `app.module.ts`, `Dockerfile` | ✅ Yes                         | ~2h           |
+| 2   | Repair idempotency guard             | `idempotency.guard.ts`, `orders.service.ts`                                | ✅ Yes                         | ~30m          |
+| 3   | Harden rate limit guard              | `rate-limit.guard.ts`                                                      | ✅ Yes                         | ~15m          |
+| 4   | Auth guard on chaos endpoint         | `chaos.controller.ts`, new `admin.guard.ts`                                | ✅ Yes                         | ~15m          |
+| 5   | Kitchen order status updates         | `orders.processor.ts`, `orders.controller.ts`, `orders.service.ts`         | ✅ Yes                         | ~45m          |
+| 6   | Docker NestJS healthchecks           | `docker-compose.yml`                                                       | ✅ Yes                         | ~20m          |
+| 7   | CI lint enforcement                  | `.github/workflows/ci.yml`                                                 | ✅ Yes                         | ~5m           |
+| 8   | Railway public URLs for web          | `docker-compose.yml`, Railway env vars                                     | ⚠️ Do last, needs Railway URLs | ~20m          |
+
+**Recommended execution order:** Fix 3 → Fix 4 → Fix 7 (all quick, no risk) → Fix 2 → Fix 1 → Fix 5 → Fix 6 → Fix 8 (when Railway is stable).
 
 ---
 
