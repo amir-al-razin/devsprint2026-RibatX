@@ -111,7 +111,7 @@ describe('HealthController', () => {
     healthCheckService.check.mockResolvedValue(mockResult);
 
     const result = await controller.check();
-    expect(result).toEqual(mockResult);
+    expect(result).toEqual({ ...mockResult, service: 'identity' });
     expect(healthCheckService.check).toHaveBeenCalledWith([
       expect.any(Function),
       expect.any(Function),

@@ -2,6 +2,7 @@ import {
   Injectable,
   ConflictException,
   ServiceUnavailableException,
+  NotFoundException,
 } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { InjectRedis } from '@nestjs-modules/ioredis';
@@ -29,7 +30,11 @@ export class OrdersService {
     }
   }
 
-  async createOrder(studentId: string, itemId: string) {
+  async createOrder(
+    studentId: string,
+    itemId: string,
+    idempotencyKey?: string,
+  ) {
     // 0. Chaos-mode gates
     await this.assertNoChaos('gateway');
     await this.assertNoChaos('stock');
@@ -64,11 +69,38 @@ export class OrdersService {
         itemId,
       });
 
-      return {
+      const orderResult = {
         orderId,
         status: 'PENDING',
         message: 'Order received and sent to kitchen',
       };
+
+      // 5. Persist order in Redis so GET /orders/:id can look it up
+      const orderPayload = {
+        orderId,
+        status: 'PENDING',
+        studentId,
+        itemId,
+        createdAt: new Date().toISOString(),
+      };
+      await this.redis.setex(
+        `order:${orderId}`,
+        86400,
+        JSON.stringify(orderPayload),
+      );
+
+      // 6. Overwrite the idempotency key with the real result so retries get
+      //    the correct orderId instead of the PROCESSING placeholder
+      if (idempotencyKey) {
+        await this.redis.set(
+          `idempotency:${idempotencyKey}`,
+          JSON.stringify(orderResult),
+          'EX',
+          3600,
+        );
+      }
+
+      return orderResult;
     } catch (error) {
       // Re-throw chaos / conflict exceptions as-is
       if (
@@ -83,5 +115,13 @@ export class OrdersService {
       await this.redis.incr('metrics:orders:failed');
       throw new ServiceUnavailableException('Stock service unavailable');
     }
+  }
+
+  async getOrder(orderId: string) {
+    const raw = await this.redis.get(`order:${orderId}`);
+    if (!raw) {
+      throw new NotFoundException(`Order ${orderId} not found`);
+    }
+    return JSON.parse(raw);
   }
 }

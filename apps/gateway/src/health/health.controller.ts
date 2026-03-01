@@ -40,7 +40,10 @@ export class HealthController {
 
   @Get()
   @HealthCheck()
-  check() {
-    return this.health.check([() => this.redisIndicator.isHealthy('redis')]);
+  async check() {
+    const result = await this.health.check([
+      () => this.redisIndicator.isHealthy('redis'),
+    ]);
+    return { ...result, service: 'gateway' };
   }
 }

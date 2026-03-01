@@ -19,6 +19,7 @@ describe('OrdersService', () => {
     redis = {
       get: jest.fn().mockResolvedValue(null),
       incr: jest.fn().mockResolvedValue(1),
+      setex: jest.fn().mockResolvedValue('OK'),
     };
     kitchenQueue = { add: jest.fn().mockResolvedValue({}) };
 
