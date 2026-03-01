@@ -1,25 +1,24 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import {
-  LineChart,
+  Legend,
   Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
 } from 'recharts'
-import {
-  ServiceName,
-  type HealthResponse,
-  type MetricsResponse,
-} from '@ribatx/types'
-import { gatewayApi } from '@/lib/api-client'
+import { ServiceName } from '@ribatx/types'
+import type { HealthResponse, MetricsResponse } from '@ribatx/types'
+import { gatewayApi, stockApi } from '@/lib/api-client'
 import { getValidToken } from '@/lib/auth'
 import { useMetricsPoller } from '@/hooks/useMetricsPoller'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
@@ -137,7 +136,7 @@ function AdminDashboard() {
   const metrics = useMetricsPoller<MetricsResponse>(GATEWAY_METRICS_URL, 3000)
 
   // Rolling 60-point cache hit/miss chart buffer
-  const [chartData, setChartData] = useState<CachePoint[]>([])
+  const [chartData, setChartData] = useState<Array<CachePoint>>([])
   useEffect(() => {
     if (!metrics) return
     const point: CachePoint = {
@@ -153,7 +152,7 @@ function AdminDashboard() {
   }, [metrics])
 
   // 30s rolling latency alert — metrics arrive every 3s → keep last 10 readings
-  const latencyWindow = useRef<number[]>([])
+  const latencyWindow = useRef<Array<number>>([])
   const [latencyAlert, setLatencyAlert] = useState(false)
   useEffect(() => {
     if (!metrics) return
@@ -174,6 +173,54 @@ function AdminDashboard() {
     ServiceName.KITCHEN,
     ServiceName.NOTIFICATION,
   ] as const
+
+  // Restock panel state
+  const [currentQty, setCurrentQty] = useState<number | null>(null)
+  const [restockQty, setRestockQty] = useState<string>('')
+  const [restocking, setRestocking] = useState(false)
+
+  // Load current stock quantity on mount and after a successful restock
+  const refreshStock = useCallback(() => {
+    stockApi
+      .items()
+      .then((items) => {
+        if (items?.[0]) {
+          setCurrentQty(items[0].quantity)
+        } else {
+          setCurrentQty(null)
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to load stock quantity', error)
+        setCurrentQty(null)
+        toast.error('Failed to load stock quantity')
+      })
+  }, [])
+
+  useEffect(() => {
+    refreshStock()
+    const timer = setInterval(refreshStock, 5000)
+    return () => clearInterval(timer)
+  }, [refreshStock])
+
+  async function handleRestock() {
+    const qty = Number(restockQty)
+    if (!Number.isInteger(qty) || qty < 0) {
+      toast.error('Enter a valid non-negative integer')
+      return
+    }
+    setRestocking(true)
+    try {
+      const result = await gatewayApi.restock(qty)
+      setCurrentQty(result.quantity)
+      setRestockQty('')
+      toast.success(`Restocked to ${result.quantity} units`)
+    } catch {
+      toast.error('Restock failed')
+    } finally {
+      setRestocking(false)
+    }
+  }
 
   const [chaosState, setChaosState] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(CHAOS_SERVICES.map((s) => [s, false])),
@@ -345,6 +392,46 @@ function AdminDashboard() {
                 )}
               </div>
             ))}
+          </CardContent>
+        </Card>
+      </section>
+
+      {/* Iftar Box Restock */}
+      <section>
+        <h2 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
+          Iftar Box Stock
+        </h2>
+        <Card>
+          <CardContent className="pt-4 flex flex-col gap-4">
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-muted-foreground">
+                Current quantity:
+              </span>
+              <span className="text-2xl font-bold tabular-nums">
+                {currentQty === null ? '—' : currentQty}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 max-w-xs">
+              <Input
+                type="number"
+                min={0}
+                placeholder="New quantity"
+                value={restockQty}
+                onChange={(e) => setRestockQty(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleRestock()}
+                className="w-36"
+              />
+              <Button
+                onClick={handleRestock}
+                disabled={restocking || restockQty === ''}
+                size="sm"
+              >
+                {restocking ? 'Updating…' : 'Set Quantity'}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Sets the absolute quantity of Iftar Boxes available for ordering.
+            </p>
           </CardContent>
         </Card>
       </section>

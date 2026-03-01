@@ -119,6 +119,13 @@ export const gatewayApi = {
       GATEWAY_BASE,
       `/admin/chaos/status?service=${service}`,
     ),
+
+  restock: (quantity: number) =>
+    request<{ id: string; name: string; quantity: number }>(
+      GATEWAY_BASE,
+      '/admin/stock/restock',
+      { method: 'PATCH', body: JSON.stringify({ quantity }) },
+    ),
 }
 
 // ─────────────────────────────────────────────

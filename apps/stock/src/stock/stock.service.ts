@@ -72,6 +72,59 @@ export class StockService {
     }
   }
 
+  async restock(quantity: number) {
+    // Look up the item once; fail fast if it does not exist (no point retrying)
+    let item = await this.prisma.item.findFirst({
+      where: { name: 'Iftar Box' },
+    });
+    if (!item) {
+      throw new NotFoundException('No item found');
+    }
+
+    let retries = 3;
+    while (retries > 0) {
+      try {
+        const updated = await this.prisma.item.updateMany({
+          where: {
+            id: item.id,
+            version: item.version,
+          },
+          data: {
+            quantity,
+            version: item.version + 1,
+          },
+        });
+
+        if (updated.count === 0) {
+          // Version conflict — re-read to get the latest version and retry
+          retries--;
+          if (retries === 0) {
+            throw new ConflictException('Concurrency conflict, try again');
+          }
+          const fresh = await this.prisma.item.findFirst({
+            where: { name: 'Iftar Box' },
+          });
+          if (!fresh) throw new NotFoundException('No item found');
+          item = fresh;
+          continue;
+        }
+
+        // Invalidate Redis cache so gateway picks up new quantity immediately
+        await this.redis.set(`stock:${item.id}`, quantity);
+        return { id: item.id, name: item.name, quantity };
+      } catch (error) {
+        if (
+          error instanceof ConflictException ||
+          error instanceof NotFoundException
+        ) {
+          throw error;
+        }
+        retries--;
+        if (retries === 0) throw error;
+      }
+    }
+  }
+
   async getItems() {
     return this.prisma.item.findMany();
   }
