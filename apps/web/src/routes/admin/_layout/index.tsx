@@ -1,20 +1,17 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import {
-  LineChart,
+  Legend,
   Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
 } from 'recharts'
-import {
-  ServiceName,
-  type HealthResponse,
-  type MetricsResponse,
-} from '@ribatx/types'
+import { ServiceName } from '@ribatx/types'
+import type { HealthResponse, MetricsResponse } from '@ribatx/types'
 import { gatewayApi } from '@/lib/api-client'
 import { getValidToken } from '@/lib/auth'
 import { useMetricsPoller } from '@/hooks/useMetricsPoller'
@@ -137,7 +134,7 @@ function AdminDashboard() {
   const metrics = useMetricsPoller<MetricsResponse>(GATEWAY_METRICS_URL, 3000)
 
   // Rolling 60-point cache hit/miss chart buffer
-  const [chartData, setChartData] = useState<CachePoint[]>([])
+  const [chartData, setChartData] = useState<Array<CachePoint>>([])
   useEffect(() => {
     if (!metrics) return
     const point: CachePoint = {
@@ -153,7 +150,7 @@ function AdminDashboard() {
   }, [metrics])
 
   // 30s rolling latency alert — metrics arrive every 3s → keep last 10 readings
-  const latencyWindow = useRef<number[]>([])
+  const latencyWindow = useRef<Array<number>>([])
   const [latencyAlert, setLatencyAlert] = useState(false)
   useEffect(() => {
     if (!metrics) return
@@ -260,7 +257,7 @@ function AdminDashboard() {
           <MetricCard
             label="Hit Ratio"
             value={
-              metrics?.cache_hits != null && metrics?.cache_misses != null
+              metrics.cache_hits != null && metrics.cache_misses != null
                 ? (
                     (metrics.cache_hits /
                       Math.max(1, metrics.cache_hits + metrics.cache_misses)) *

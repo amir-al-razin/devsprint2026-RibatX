@@ -1,9 +1,9 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
-import { useState, useEffect, useCallback } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { OrderStatus } from '@ribatx/types'
 import { gatewayApi, kitchenApi, stockApi } from '@/lib/api-client'
-import { getValidToken, getStudentId } from '@/lib/auth'
+import { getStudentId, getValidToken } from '@/lib/auth'
 import { useOrderStatus } from '@/hooks/useOrderStatus'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils'
 
 // ─── Step tracker ────────────────────────────────────────────────────────────
 
-const STEPS: { status: OrderStatus; label: string }[] = [
+const STEPS: Array<{ status: OrderStatus; label: string }> = [
   { status: OrderStatus.PENDING, label: 'Pending' },
   { status: OrderStatus.STOCK_VERIFIED, label: 'Stock Verified' },
   { status: OrderStatus.IN_KITCHEN, label: 'In Kitchen' },
@@ -62,7 +62,7 @@ function OrderDashboard() {
     stockApi
       .items()
       .then((items) => {
-        if (items?.[0]?.id) setIftarBoxId(items[0].id)
+        if (items[0]?.id) setIftarBoxId(items[0].id)
       })
       .catch(() => {
         /* stock unreachable — order button stays disabled */

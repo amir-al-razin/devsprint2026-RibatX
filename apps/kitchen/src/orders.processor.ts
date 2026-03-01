@@ -7,8 +7,18 @@ import axios from 'axios';
 export class OrdersProcessor extends WorkerHost {
   private readonly logger = new Logger(OrdersProcessor.name);
 
-  async process(job: Job<any, any, string>): Promise<any> {
-    const { orderId, studentId, itemId } = job.data;
+  async process(
+    job: Job<
+      { orderId: string; studentId: string; itemId: string },
+      any,
+      string
+    >,
+  ): Promise<{ status: string; orderId: string }> {
+    const { orderId, studentId } = job.data as {
+      orderId: string;
+      studentId: string;
+      itemId: string;
+    };
     this.logger.log(`Processing order ${orderId} for student ${studentId}...`);
 
     const notificationUrl =
@@ -21,7 +31,7 @@ export class OrdersProcessor extends WorkerHost {
         studentId,
       });
       this.logger.log(`Order ${orderId} marked IN_KITCHEN`);
-    } catch (error) {
+    } catch {
       this.logger.error(
         `Failed to send IN_KITCHEN notification for order ${orderId}`,
       );
@@ -39,7 +49,7 @@ export class OrdersProcessor extends WorkerHost {
         status: 'READY',
         studentId,
       });
-    } catch (error) {
+    } catch {
       this.logger.error(
         `Failed to send READY notification for order ${orderId}`,
       );
