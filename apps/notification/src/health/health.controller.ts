@@ -29,7 +29,10 @@ export class HealthController {
 
   @Get()
   @HealthCheck()
-  check() {
-    return this.health.check([() => this.uptimeIndicator.isHealthy('service')]);
+  async check() {
+    const result = await this.health.check([
+      () => this.uptimeIndicator.isHealthy('service'),
+    ]);
+    return { ...result, service: 'notification' };
   }
 }
