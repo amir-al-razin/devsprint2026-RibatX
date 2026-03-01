@@ -1,8 +1,22 @@
-import { Controller, Post, Get, Body, Query } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  Query,
+  UseGuards,
+  SetMetadata,
+} from '@nestjs/common';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
+import { JwtAuthGuard } from './auth/jwt-auth.guard';
+import { RolesGuard, ROLES_KEY } from './common/guards/roles.guard';
+
+const Roles = (...roles: string[]) => SetMetadata(ROLES_KEY, roles);
 
 @Controller('admin/chaos')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('admin')
 export class ChaosController {
   constructor(@InjectRedis() private readonly redis: Redis) {}
 

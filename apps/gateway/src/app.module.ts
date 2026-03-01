@@ -23,7 +23,13 @@ import { MetricsInterceptor } from './common/interceptors/metrics.interceptor';
     BullModule.forRoot({
       connection: (() => {
         const url = new URL(process.env.REDIS_URL || 'redis://localhost:6379');
-        return { host: url.hostname, port: parseInt(url.port || '6379', 10) };
+        return {
+          host: url.hostname,
+          port: parseInt(url.port || '6379', 10),
+          ...(url.password
+            ? { password: decodeURIComponent(url.password) }
+            : {}),
+        };
       })(),
     }),
     OrdersModule,
