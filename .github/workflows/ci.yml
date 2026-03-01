@@ -32,7 +32,6 @@ jobs:
 
       - name: Lint all services
         run: pnpm turbo lint
-        continue-on-error: true  # Don't block on lint warnings initially
 
       - name: Build all services
         run: pnpm turbo build
