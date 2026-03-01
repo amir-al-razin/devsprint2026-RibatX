@@ -4,9 +4,11 @@ import { AppService } from './app.service';
 import { RedisModule } from '@nestjs-modules/ioredis';
 import { JwtModule } from '@nestjs/jwt';
 import { BullModule } from '@nestjs/bullmq';
+import { HttpModule } from '@nestjs/axios';
 import { OrdersModule } from './orders/orders.module';
 import { JwtStrategy } from './auth/jwt.strategy';
 import { ChaosController } from './chaos.controller';
+import { AdminStockController } from './admin-stock.controller';
 import { HealthModule } from './health/health.module';
 import { MetricsModule } from './metrics/metrics.module';
 
@@ -34,10 +36,11 @@ import { RolesGuard } from './common/guards/roles.guard';
       })(),
     }),
     OrdersModule,
+    HttpModule,
     HealthModule,
     MetricsModule,
   ],
-  controllers: [AppController, ChaosController],
+  controllers: [AppController, ChaosController, AdminStockController],
   providers: [
     AppService,
     JwtStrategy,
