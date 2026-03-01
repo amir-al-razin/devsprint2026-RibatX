@@ -4,14 +4,20 @@ import { AppModule } from './app.module';
 import { PrismaClient } from './generated/prisma';
 
 async function seedItems(prisma: PrismaClient) {
-  // Ensure there is exactly one "Iftar Box" item.
-  const existing = await prisma.item.findFirst({
+  // Ensure there is exactly one "Iftar Box" item without deleting unrelated items.
+  const existingItems = await prisma.item.findMany({
     where: { name: 'Iftar Box' },
   });
-  if (!existing) {
-    await prisma.item.deleteMany();
+
+  if (existingItems.length === 0) {
     await prisma.item.create({ data: { name: 'Iftar Box', quantity: 100 } });
     console.log('[stock] Initialised single Iftar Box item (qty: 100)');
+  } else if (existingItems.length > 1) {
+    await prisma.item.deleteMany({ where: { name: 'Iftar Box' } });
+    await prisma.item.create({ data: { name: 'Iftar Box', quantity: 100 } });
+    console.log(
+      '[stock] Normalised Iftar Box items to a single entry (qty: 100)',
+    );
   }
 }
 
