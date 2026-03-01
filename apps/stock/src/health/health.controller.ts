@@ -61,10 +61,11 @@ export class HealthController {
 
   @Get()
   @HealthCheck()
-  check() {
-    return this.health.check([
+  async check() {
+    const result = await this.health.check([
       () => this.prismaIndicator.isHealthy('database'),
       () => this.redisIndicator.isHealthy('redis'),
     ]);
+    return { ...result, service: 'stock' };
   }
 }

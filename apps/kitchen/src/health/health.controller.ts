@@ -39,7 +39,10 @@ export class HealthController {
 
   @Get()
   @HealthCheck()
-  check() {
-    return this.health.check([() => this.bullIndicator.isHealthy('queue')]);
+  async check() {
+    const result = await this.health.check([
+      () => this.bullIndicator.isHealthy('queue'),
+    ]);
+    return { ...result, service: 'kitchen' };
   }
 }

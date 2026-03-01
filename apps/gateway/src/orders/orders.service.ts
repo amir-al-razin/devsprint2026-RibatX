@@ -2,6 +2,7 @@ import {
   Injectable,
   ConflictException,
   ServiceUnavailableException,
+  NotFoundException,
 } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { InjectRedis } from '@nestjs-modules/ioredis';
@@ -64,6 +65,20 @@ export class OrdersService {
         itemId,
       });
 
+      // 5. Persist order in Redis so GET /orders/:id can look it up
+      const orderPayload = {
+        orderId,
+        status: 'PENDING',
+        studentId,
+        itemId,
+        createdAt: new Date().toISOString(),
+      };
+      await this.redis.setex(
+        `order:${orderId}`,
+        86400,
+        JSON.stringify(orderPayload),
+      );
+
       return {
         orderId,
         status: 'PENDING',
@@ -83,5 +98,13 @@ export class OrdersService {
       await this.redis.incr('metrics:orders:failed');
       throw new ServiceUnavailableException('Stock service unavailable');
     }
+  }
+
+  async getOrder(orderId: string) {
+    const raw = await this.redis.get(`order:${orderId}`);
+    if (!raw) {
+      throw new NotFoundException(`Order ${orderId} not found`);
+    }
+    return JSON.parse(raw);
   }
 }
