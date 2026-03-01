@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { type OrderStatusEvent, OrderStatus } from '@ribatx/types'
 import { useSocket } from './useSocket'
+import type { OrderStatus, OrderStatusEvent } from '@ribatx/types'
 
 export interface OrderState {
   orderId: string

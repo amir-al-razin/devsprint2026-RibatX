@@ -1,14 +1,14 @@
+import { getToken } from './auth'
 import type {
   AuthResponse,
-  LoginRequest,
-  OrderResponseDto,
   ChaosToggleRequest,
   ChaosToggleResponse,
   HealthResponse,
+  LoginRequest,
   MetricsResponse,
+  OrderResponseDto,
   StockItem,
 } from '@ribatx/types'
-import { getToken } from './auth'
 
 // In dev these resolve through the Vite proxy.
 // In Docker / Railway use the injected env vars that point to real services.
@@ -134,7 +134,7 @@ function svcBase(envKey: string, fallbackPort: number): string {
 
 export const stockApi = {
   items: () =>
-    request<StockItem[]>(svcBase('VITE_STOCK_URL', 3002), '/stock/items', {
+    request<Array<StockItem>>(svcBase('VITE_STOCK_URL', 3002), '/stock/items', {
       skipAuth: true,
     }),
   health: () =>

@@ -1,17 +1,17 @@
 import {
-  createFileRoute,
   Outlet,
+  createFileRoute,
   redirect,
   useRouter,
 } from '@tanstack/react-router'
+import { useEffect, useState } from 'react'
 import {
-  getValidToken,
+  clearToken,
   getStudentId,
   getStudentName,
-  clearToken,
+  getValidToken,
 } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
-import { useEffect, useState } from 'react'
 
 export const Route = createFileRoute('/(student)/_layout')({
   beforeLoad: () => {

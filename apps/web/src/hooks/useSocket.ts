@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { io, Socket } from 'socket.io-client'
+import { io } from 'socket.io-client'
+import type { Socket } from 'socket.io-client'
 
 const NOTIFICATION_HUB_URL =
   (import.meta as ImportMeta & { env: Record<string, string> }).env

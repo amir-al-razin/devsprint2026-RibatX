@@ -1,12 +1,12 @@
 import {
-  createFileRoute,
   Outlet,
+  createFileRoute,
   redirect,
   useRouter,
 } from '@tanstack/react-router'
-import { getValidToken, isAdmin, clearToken } from '@/lib/auth'
-import { Button } from '@/components/ui/button'
 import { useEffect, useState } from 'react'
+import { clearToken, getValidToken, isAdmin } from '@/lib/auth'
+import { Button } from '@/components/ui/button'
 
 export const Route = createFileRoute('/admin/_layout')({
   beforeLoad: () => {

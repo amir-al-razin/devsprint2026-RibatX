@@ -1,12 +1,13 @@
 import { createFileRoute, redirect, useRouter } from '@tanstack/react-router'
-import { useState, useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { identityApi, type ApiError } from '@/lib/api-client'
+import type { ApiError } from '@/lib/api-client'
+import { identityApi } from '@/lib/api-client'
 import {
-  storeToken,
-  getValidToken,
   clearToken,
   getStudentName,
+  getValidToken,
+  storeToken,
 } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,9 +15,9 @@ import { Label } from '@/components/ui/label'
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
-  CardDescription,
 } from '@/components/ui/card'
 
 export const Route = createFileRoute('/(student)/login')({

@@ -1,12 +1,12 @@
 import { createFileRoute, useRouter } from '@tanstack/react-router'
-import { getValidToken, getStudentName, clearToken } from '@/lib/auth'
+import { clearToken, getStudentName, getValidToken } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
-  CardDescription,
 } from '@/components/ui/card'
 
 export const Route = createFileRoute('/unauthorized')({
