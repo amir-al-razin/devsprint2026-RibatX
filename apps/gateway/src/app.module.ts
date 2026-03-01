@@ -12,6 +12,7 @@ import { MetricsModule } from './metrics/metrics.module';
 
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { MetricsInterceptor } from './common/interceptors/metrics.interceptor';
+import { RolesGuard } from './common/guards/roles.guard';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { MetricsInterceptor } from './common/interceptors/metrics.interceptor';
   providers: [
     AppService,
     JwtStrategy,
+    RolesGuard,
     {
       provide: APP_INTERCEPTOR,
       useClass: MetricsInterceptor,
