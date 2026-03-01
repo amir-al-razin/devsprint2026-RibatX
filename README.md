@@ -1,6 +1,6 @@
 # devsprint2026-RibatX
 
-IUT Cafeteria ordering system — DevSprint 2026 hackathon project.  
+IUT Cafeteria ordering system — DevSprint 2026 hackathon project..
 Turborepo monorepo · 5 NestJS microservices · TanStack Start frontend · PostgreSQL · Redis · BullMQ
 
 ---
