@@ -4,12 +4,13 @@ import {
   Body,
   UseGuards,
   BadRequestException,
+  BadGatewayException,
+  SetMetadata,
 } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard, ROLES_KEY } from './common/guards/roles.guard';
-import { SetMetadata } from '@nestjs/common';
 
 const Roles = (...roles: string[]) => SetMetadata(ROLES_KEY, roles);
 
@@ -32,9 +33,19 @@ export class AdminStockController {
       throw new BadRequestException('quantity must be a non-negative integer');
     }
     const stockUrl = process.env.STOCK_SERVICE_URL || 'http://localhost:3002';
-    const res = await firstValueFrom(
-      this.httpService.patch(`${stockUrl}/stock/restock`, { quantity }),
-    );
-    return res.data;
+    try {
+      const res = await firstValueFrom(
+        this.httpService.patch(
+          `${stockUrl}/stock/restock`,
+          { quantity },
+          {
+            timeout: 5000,
+          },
+        ),
+      );
+      return res.data;
+    } catch {
+      throw new BadGatewayException('Stock service unavailable');
+    }
   }
 }

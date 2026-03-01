@@ -10,7 +10,13 @@ jest.mock('../prisma/prisma.service', () => ({
 
 describe('StockService', () => {
   let service: StockService;
-  let prisma: { item: { findUnique: jest.Mock; updateMany: jest.Mock } };
+  let prisma: {
+    item: {
+      findUnique: jest.Mock;
+      findFirst: jest.Mock;
+      updateMany: jest.Mock;
+    };
+  };
   let redis: { set: jest.Mock };
 
   const mockItem = {
@@ -24,6 +30,7 @@ describe('StockService', () => {
     prisma = {
       item: {
         findUnique: jest.fn(),
+        findFirst: jest.fn(),
         updateMany: jest.fn(),
       },
     };
@@ -90,6 +97,48 @@ describe('StockService', () => {
         NotFoundException,
       );
       expect(prisma.item.updateMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('restock', () => {
+    it('sets quantity, increments version, and writes back to Redis on success', async () => {
+      prisma.item.findFirst.mockResolvedValue(mockItem);
+      prisma.item.updateMany.mockResolvedValue({ count: 1 });
+
+      const result = await service.restock(50);
+
+      expect(result).toEqual({ id: 'item-1', name: 'Iftar Box', quantity: 50 });
+      expect(prisma.item.updateMany).toHaveBeenCalledWith({
+        where: { id: 'item-1', version: 1 },
+        data: { quantity: 50, version: 2 },
+      });
+      expect(redis.set).toHaveBeenCalledWith('stock:item-1', 50);
+    });
+
+    it('throws NotFoundException when no item exists', async () => {
+      prisma.item.findFirst.mockResolvedValue(null);
+
+      await expect(service.restock(10)).rejects.toThrow(NotFoundException);
+      expect(prisma.item.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('throws ConflictException after exhausting all 3 version-conflict retries', async () => {
+      prisma.item.findFirst.mockResolvedValue(mockItem);
+      prisma.item.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(service.restock(20)).rejects.toThrow(ConflictException);
+      expect(prisma.item.updateMany).toHaveBeenCalledTimes(3);
+    });
+
+    it('retries on version conflict and succeeds on second attempt', async () => {
+      prisma.item.findFirst.mockResolvedValue(mockItem);
+      prisma.item.updateMany
+        .mockResolvedValueOnce({ count: 0 })
+        .mockResolvedValueOnce({ count: 1 });
+
+      const result = await service.restock(30);
+      expect(result).toEqual({ id: 'item-1', name: 'Iftar Box', quantity: 30 });
+      expect(prisma.item.updateMany).toHaveBeenCalledTimes(2);
     });
   });
 });
