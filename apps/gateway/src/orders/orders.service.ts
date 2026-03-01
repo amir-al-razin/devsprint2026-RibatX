@@ -30,7 +30,11 @@ export class OrdersService {
     }
   }
 
-  async createOrder(studentId: string, itemId: string) {
+  async createOrder(
+    studentId: string,
+    itemId: string,
+    idempotencyKey?: string,
+  ) {
     // 0. Chaos-mode gates
     await this.assertNoChaos('gateway');
     await this.assertNoChaos('stock');
@@ -65,6 +69,12 @@ export class OrdersService {
         itemId,
       });
 
+      const orderResult = {
+        orderId,
+        status: 'PENDING',
+        message: 'Order received and sent to kitchen',
+      };
+
       // 5. Persist order in Redis so GET /orders/:id can look it up
       const orderPayload = {
         orderId,
@@ -79,11 +89,18 @@ export class OrdersService {
         JSON.stringify(orderPayload),
       );
 
-      return {
-        orderId,
-        status: 'PENDING',
-        message: 'Order received and sent to kitchen',
-      };
+      // 6. Overwrite the idempotency key with the real result so retries get
+      //    the correct orderId instead of the PROCESSING placeholder
+      if (idempotencyKey) {
+        await this.redis.set(
+          `idempotency:${idempotencyKey}`,
+          JSON.stringify(orderResult),
+          'EX',
+          3600,
+        );
+      }
+
+      return orderResult;
     } catch (error) {
       // Re-throw chaos / conflict exceptions as-is
       if (
