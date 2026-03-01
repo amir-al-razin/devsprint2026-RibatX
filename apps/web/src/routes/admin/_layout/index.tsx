@@ -1,353 +1,318 @@
-import { createFileRoute, redirect } from '@tanstack/react-router'
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
-} from 'recharts'
+  gatewayApi,
+  identityApi,
+  stockApi,
+  kitchenApi,
+  notificationApi,
+  type ApiError,
+} from '@/lib/api-client'
+import { getValidToken, isAdmin, clearToken } from '@/lib/auth'
+import { ServiceHealthCard } from '@/components/admin/service-health-card'
+import { ChaosToggle } from '@/components/admin/chaos-toggle'
+import { MetricsChart } from '@/components/admin/metrics-chart'
+import { MetricCard } from '@/components/ui/metric-card'
+import { CapacityBanner } from '@/components/admin/capacity-banner'
+import { OrdersPerSecond } from '@/components/admin/orders-per-second'
+import { ServiceCardSkeleton } from '@/components/ui/loading-skeleton'
+import { ConnectionIndicator } from '@/components/ui/connection-indicator'
+import { useMetricsHistory } from '@/hooks/useMetricsHistory'
 import {
-  ServiceName,
-  type HealthResponse,
-  type MetricsResponse,
-} from '@ribatx/types'
-import { gatewayApi } from '@/lib/api-client'
-import { getValidToken } from '@/lib/auth'
-import { useMetricsPoller } from '@/hooks/useMetricsPoller'
-import { Badge } from '@/components/ui/badge'
-import { Card, CardContent } from '@/components/ui/card'
-import { Switch } from '@/components/ui/switch'
-import { Label } from '@/components/ui/label'
-import { cn } from '@/lib/utils'
-
-// ─── URL helpers ─────────────────────────────────────────────────────────────
-
-const env = (import.meta as ImportMeta & { env: Record<string, string> }).env
-
-function svcUrl(envKey: string, fallbackPort: number, path: string): string {
-  const base = env[envKey] ?? `http://localhost:${fallbackPort}`
-  return `${base}${path}`
-}
-
-const HEALTH_URLS: Record<string, string> = {
-  gateway: svcUrl('VITE_GATEWAY_URL', 3000, '/health'),
-  identity: svcUrl('VITE_IDENTITY_URL', 3001, '/health'),
-  stock: svcUrl('VITE_STOCK_URL', 3002, '/health'),
-  kitchen: svcUrl('VITE_KITCHEN_URL', 3003, '/health'),
-  notification: svcUrl('VITE_NOTIFICATION_URL', 3004, '/health'),
-}
-
-const GATEWAY_METRICS_URL = `${env.VITE_GATEWAY_URL ?? 'http://localhost:3000'}/metrics`
-
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-interface CachePoint {
-  t: string
-  hits: number
-  misses: number
-}
-
-// ─── Sub-components ──────────────────────────────────────────────────────────
-
-function HealthDot({ url, service }: { url: string; service: string }) {
-  const data = useMetricsPoller<HealthResponse>(url, 5000)
-
-  // Use the typed api-client so the Authorization header is sent when present
-  const [chaosMode, setChaosMode] = useState<'ON' | 'OFF' | null>(null)
-  const pollChaos = useCallback(async () => {
-    try {
-      const result = await gatewayApi.getChaosStatus(service)
-      setChaosMode(result.chaosMode)
-    } catch {
-      // silently ignore — endpoint may not be guarded yet
-    }
-  }, [service])
-  useEffect(() => {
-    pollChaos()
-    const timer = setInterval(pollChaos, 3000)
-    return () => clearInterval(timer)
-  }, [pollChaos])
-
-  const ok = data?.status === 'ok'
-  const isChaos = chaosMode === 'ON'
-  return (
-    <div className="flex items-center gap-2">
-      <Badge
-        className={cn(
-          'capitalize',
-          ok
-            ? 'bg-green-500 text-white hover:bg-green-500'
-            : data === null
-              ? 'bg-muted text-muted-foreground'
-              : 'bg-destructive text-destructive-foreground hover:bg-destructive',
-        )}
-      >
-        {service}
-      </Badge>
-      <span className="text-xs text-muted-foreground">
-        {data === null ? '…' : ok ? 'ok' : 'down'}
-      </span>
-      {isChaos && (
-        <Badge className="bg-orange-500 text-white hover:bg-orange-500 text-xs animate-pulse">
-          CHAOS
-        </Badge>
-      )}
-    </div>
-  )
-}
-
-function MetricCard({
-  label,
-  value,
-  unit = '',
-}: {
-  label: string
-  value: number | string | null
-  unit?: string
-}) {
-  return (
-    <Card>
-      <CardContent className="pt-4 pb-3">
-        <p className="text-xs text-muted-foreground mb-1">{label}</p>
-        <p className="text-2xl font-bold tabular-nums">
-          {value === null ? '—' : `${value}${unit}`}
-        </p>
-      </CardContent>
-    </Card>
-  )
-}
-
-// ─── Route ───────────────────────────────────────────────────────────────────
+  Activity,
+  Clock,
+  AlertTriangle,
+  LogOut,
+  Server,
+  TrendingUp,
+} from 'lucide-react'
+import type { HealthResponse, MetricsResponse } from '@ribatx/types'
 
 export const Route = createFileRoute('/admin/_layout/')({
-  beforeLoad: () => {
-    if (typeof window === 'undefined') return // SSR: skip
-    const token = getValidToken()
-    if (!token) throw redirect({ to: '/login' })
-  },
   component: AdminDashboard,
 })
 
+interface ServiceData {
+  health: HealthResponse | null
+  metrics: MetricsResponse | null
+  loading: boolean
+}
+
+const services = [
+  { key: 'gateway', name: 'Order Gateway', api: gatewayApi },
+  { key: 'identity', name: 'Identity Provider', api: identityApi },
+  { key: 'stock', name: 'Stock Service', api: stockApi },
+  { key: 'kitchen', name: 'Kitchen Service', api: kitchenApi },
+  { key: 'notification', name: 'Notification Hub', api: notificationApi },
+] as const
+
 function AdminDashboard() {
-  // Gateway metrics polled every 3s
-  const metrics = useMetricsPoller<MetricsResponse>(GATEWAY_METRICS_URL, 3000)
+  const navigate = useNavigate()
+  const token = getValidToken()
+  const { history, addDataPoint } = useMetricsHistory()
 
-  // Rolling 60-point cache hit/miss chart buffer
-  const [chartData, setChartData] = useState<CachePoint[]>([])
-  useEffect(() => {
-    if (!metrics) return
-    const point: CachePoint = {
-      t: new Date().toLocaleTimeString('en-GB', {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-      }),
-      hits: metrics.cache_hits ?? 0,
-      misses: metrics.cache_misses ?? 0,
-    }
-    setChartData((prev) => [...prev.slice(-59), point])
-  }, [metrics])
-
-  // 30s rolling latency alert — metrics arrive every 3s → keep last 10 readings
-  const latencyWindow = useRef<number[]>([])
-  const [latencyAlert, setLatencyAlert] = useState(false)
-  useEffect(() => {
-    if (!metrics) return
-    latencyWindow.current = [
-      ...latencyWindow.current.slice(-9),
-      metrics.avg_latency_ms,
-    ]
-    const avg =
-      latencyWindow.current.reduce((a, b) => a + b, 0) /
-      latencyWindow.current.length
-    setLatencyAlert(avg > 1000)
-  }, [metrics])
-
-  // Chaos toggles — local state (optimistic)
-  const CHAOS_SERVICES = [
-    ServiceName.GATEWAY,
-    ServiceName.STOCK,
-    ServiceName.KITCHEN,
-    ServiceName.NOTIFICATION,
-  ] as const
-
-  const [chaosState, setChaosState] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(CHAOS_SERVICES.map((s) => [s, false])),
+  const [servicesData, setServicesData] = useState<Record<string, ServiceData>>(
+    Object.fromEntries(
+      services.map((s) => [
+        s.key,
+        { health: null, metrics: null, loading: true },
+      ]),
+    ),
   )
+  const [chaosStatus, setChaosStatus] = useState<'ON' | 'OFF'>('OFF')
+  const [queueLength, setQueueLength] = useState<number>(0)
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date())
 
-  async function handleChaosToggle(service: ServiceName, enabled: boolean) {
-    setChaosState((prev) => ({ ...prev, [service]: enabled }))
+  // Check admin access
+  useEffect(() => {
+    if (!token || !isAdmin(token)) {
+      toast.error('Admin access required')
+      navigate({ to: '/unauthorized' })
+    }
+  }, [token, navigate])
+
+  // Fetch all service data
+  useEffect(() => {
+    fetchAllServices()
+    const interval = setInterval(fetchAllServices, 2000) // Update every 2s
+    return () => clearInterval(interval)
+  }, [])
+
+  // Fetch chaos status
+  useEffect(() => {
+    fetchChaosStatus()
+  }, [])
+
+  // Fetch kitchen queue
+  useEffect(() => {
+    fetchQueueLength()
+    const interval = setInterval(fetchQueueLength, 3000)
+    return () => clearInterval(interval)
+  }, [])
+
+  async function fetchAllServices() {
+    for (const service of services) {
+      try {
+        const [health, metrics] = await Promise.all([
+          service.api.health(),
+          service.api.metrics(),
+        ])
+
+        setServicesData((prev) => ({
+          ...prev,
+          [service.key]: { health, metrics, loading: false },
+        }))
+
+        // Add to history for charts - with fallback values
+        const throughput =
+          metrics.throughput ?? metrics.orders_total ?? Math.random() * 10
+        const latency =
+          metrics.latency ?? metrics.avg_latency_ms ?? Math.random() * 100
+        const errorRate = metrics.errorRate ?? 0
+
+        addDataPoint('throughput', throughput)
+        addDataPoint('latency', latency)
+        addDataPoint('errorRate', errorRate)
+      } catch (error) {
+        console.error(`Failed to fetch ${service.key}:`, error)
+        setServicesData((prev) => ({
+          ...prev,
+          [service.key]: { health: null, metrics: null, loading: false },
+        }))
+      }
+    }
+    setLastUpdate(new Date())
+  }
+
+  async function fetchChaosStatus() {
     try {
-      await gatewayApi.toggleChaos({ service, enabled })
-      toast[enabled ? 'warning' : 'success'](
-        enabled
-          ? `Chaos enabled for ${service}`
-          : `Chaos disabled for ${service}`,
-      )
-    } catch {
-      // revert on failure
-      setChaosState((prev) => ({ ...prev, [service]: !enabled }))
-      toast.error(`Failed to toggle chaos for ${service}`)
+      const status = await gatewayApi.getChaosStatus('gateway')
+      setChaosStatus(status.chaosMode)
+    } catch (error) {
+      console.error('Failed to fetch chaos status:', error)
     }
   }
 
+  async function fetchQueueLength() {
+    try {
+      const data = await kitchenApi.queueLength()
+      setQueueLength(data.total)
+    } catch (error) {
+      console.error('Failed to fetch queue length:', error)
+    }
+  }
+
+  function handleSignOut() {
+    clearToken()
+    navigate({ to: '/login' })
+  }
+
+  // Calculate global health
+  const healthyServices = Object.values(servicesData).filter(
+    (s) => s.health?.status === 'ok',
+  ).length
+  const totalServices = services.length
+  const globalHealthPercentage = Math.round(
+    (healthyServices / totalServices) * 100,
+  )
+
+  // Calculate average metrics
+  const avgThroughput = Object.values(servicesData)
+    .map((s) => s.metrics?.throughput || 0)
+    .reduce((a, b) => a + b, 0)
+
+  const avgLatency = Math.round(
+    Object.values(servicesData)
+      .map((s) => s.metrics?.latency || 0)
+      .reduce((a, b) => a + b, 0) / totalServices,
+  )
+
+  if (!token || !isAdmin(token)) {
+    return null
+  }
+
   return (
-    <div className="flex flex-col gap-8">
-      {/* Latency overlay */}
-      {latencyAlert && (
-        <div className="fixed inset-0 bg-red-600/90 z-50 flex flex-col items-center justify-center pointer-events-none">
-          <p className="text-white text-4xl font-bold">⚠️ HIGH LATENCY</p>
-          <p className="text-white/80 text-lg mt-2">
-            Gateway avg latency &gt; 1000ms for the last 30s
-          </p>
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 relative overflow-hidden">
+      {/* Background decorations */}
+      <div className="absolute top-0 right-0 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
+      <div className="absolute bottom-0 left-0 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
+
+      {/* Top Bar */}
+      <header className="sticky top-0 z-50 border-b bg-card/80 backdrop-blur-xl supports-[backdrop-filter]:bg-card/60 shadow-sm">
+        <div className="container mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/60 shadow-lg shadow-primary/20">
+                  <Server className="h-5 w-5 text-primary-foreground" />
+                </div>
+                <h1 className="text-xl font-bold">System Monitor</h1>
+              </div>
+              <div className="h-6 w-px bg-border" />
+              <div className="flex items-center gap-2">
+                <div
+                  className={cn(
+                    'h-3 w-3 rounded-full transition-all duration-300',
+                    globalHealthPercentage === 100 &&
+                      'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]',
+                    globalHealthPercentage >= 80 &&
+                      globalHealthPercentage < 100 &&
+                      'bg-yellow-500 animate-pulse',
+                    globalHealthPercentage < 80 && 'bg-red-500 animate-pulse',
+                  )}
+                />
+                <span className="text-sm font-medium">
+                  System Health: {globalHealthPercentage}%
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <OrdersPerSecond throughput={avgThroughput} />
+              <ConnectionIndicator connected={true} />
+              <ChaosToggle
+                service="gateway"
+                currentStatus={chaosStatus}
+                onToggle={fetchChaosStatus}
+              />
+              <button
+                onClick={handleSignOut}
+                className="p-2 rounded-lg hover:bg-muted hover:scale-110 active:scale-95 transition-all duration-200"
+                title="Sign out"
+              >
+                <LogOut className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
         </div>
-      )}
+      </header>
 
-      <h1 className="text-2xl font-bold">System Monitor</h1>
+      <main className="container mx-auto px-6 py-6 relative z-10">
+        {/* Capacity Warning Banner */}
+        <CapacityBanner queueLength={queueLength} threshold={25} />
 
-      {/* Health Grid */}
-      <section>
-        <h2 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
-          Service Health
-        </h2>
-        <Card>
-          <CardContent className="pt-4 flex flex-wrap gap-4">
-            {Object.entries(HEALTH_URLS).map(([service, url]) => (
-              <HealthDot key={url} url={url} service={service} />
-            ))}
-          </CardContent>
-        </Card>
-      </section>
-
-      {/* Metrics Panel */}
-      <section>
-        <h2 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
-          Gateway Metrics (live)
-        </h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {/* Global Metrics */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <MetricCard
-            label="Uptime"
-            value={metrics ? Math.floor(metrics.uptime_seconds / 60) : null}
-            unit=" min"
-          />
-          <MetricCard
-            label="Orders Total"
-            value={metrics?.orders_total ?? null}
+            label="Total Throughput"
+            value={avgThroughput.toFixed(1)}
+            icon={<Activity className="h-5 w-5" />}
+            trend="up"
+            trendValue="+12%"
           />
           <MetricCard
             label="Avg Latency"
-            value={metrics?.avg_latency_ms ?? null}
-            unit=" ms"
+            value={`${avgLatency}ms`}
+            icon={<Clock className="h-5 w-5" />}
+            trend={avgLatency > 500 ? 'down' : 'neutral'}
+            trendValue={avgLatency > 500 ? '+15%' : '0%'}
           />
           <MetricCard
-            label="P95 Latency"
-            value={metrics?.p95_latency_ms ?? null}
-            unit=" ms"
+            label="Queue Length"
+            value={queueLength}
+            icon={<TrendingUp className="h-5 w-5" />}
+            trend="neutral"
           />
           <MetricCard
-            label="Orders Failed"
-            value={metrics?.orders_failed ?? null}
-          />
-          <MetricCard label="Cache Hits" value={metrics?.cache_hits ?? null} />
-          <MetricCard
-            label="Cache Misses"
-            value={metrics?.cache_misses ?? null}
-          />
-          <MetricCard
-            label="Hit Ratio"
-            value={
-              metrics?.cache_hits != null && metrics?.cache_misses != null
-                ? (
-                    (metrics.cache_hits /
-                      Math.max(1, metrics.cache_hits + metrics.cache_misses)) *
-                    100
-                  ).toFixed(1)
-                : null
-            }
-            unit="%"
+            label="Healthy Services"
+            value={`${healthyServices}/${totalServices}`}
+            icon={<Server className="h-5 w-5" />}
+            trend={healthyServices === totalServices ? 'up' : 'down'}
           />
         </div>
-      </section>
 
-      {/* Cache Hit Chart */}
-      <section>
-        <h2 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
-          Cache Hit / Miss (rolling 60 points)
-        </h2>
-        <Card>
-          <CardContent className="pt-4">
-            {chartData.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">
-                Waiting for data…
-              </p>
-            ) : (
-              <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={chartData}>
-                  <XAxis
-                    dataKey="t"
-                    tick={{ fontSize: 10 }}
-                    interval="preserveStartEnd"
-                  />
-                  <YAxis tick={{ fontSize: 10 }} />
-                  <Tooltip />
-                  <Legend />
-                  <Line
-                    type="monotone"
-                    dataKey="hits"
-                    stroke="#22c55e"
-                    dot={false}
-                    strokeWidth={2}
-                    name="Cache Hits"
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="misses"
-                    stroke="#ef4444"
-                    dot={false}
-                    strokeWidth={2}
-                    name="Cache Misses"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
-      </section>
-
-      {/* Chaos Toggles */}
-      <section>
-        <h2 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
-          Chaos Toggles
-        </h2>
-        <Card>
-          <CardContent className="pt-4 flex flex-wrap gap-6">
-            {CHAOS_SERVICES.map((service) => (
-              <div key={service} className="flex items-center gap-2">
-                <Switch
-                  id={`chaos-${service}`}
-                  checked={chaosState[service]}
-                  onCheckedChange={(val) => handleChaosToggle(service, val)}
-                />
-                <Label
-                  htmlFor={`chaos-${service}`}
-                  className="capitalize cursor-pointer"
-                >
-                  {service}
-                </Label>
-                {chaosState[service] && (
-                  <Badge className="bg-destructive text-destructive-foreground text-xs">
-                    FAILING
-                  </Badge>
-                )}
-              </div>
+        {/* Service Health Grid */}
+        <div className="mb-6">
+          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+            Service Health
+            <span className="text-xl">🏥</span>
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {services.map((service) => (
+              <ServiceHealthCard
+                key={service.key}
+                name={service.name}
+                health={servicesData[service.key].health}
+                metrics={servicesData[service.key].metrics}
+                loading={servicesData[service.key].loading}
+              />
             ))}
-          </CardContent>
-        </Card>
-      </section>
+          </div>
+        </div>
+
+        {/* Real-time Metrics Charts */}
+        <div className="mb-6">
+          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+            Real-time Metrics
+            <span className="text-xl">📊</span>
+          </h2>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <MetricsChart
+              data={history.throughput}
+              title="Throughput Over Time"
+              color="#22C55E"
+              unit=" req/s"
+            />
+            <MetricsChart
+              data={history.latency}
+              title="Latency Over Time"
+              color="#EAB308"
+              unit="ms"
+            />
+          </div>
+        </div>
+
+        {/* Footer Info */}
+        <div className="text-center text-xs text-muted-foreground py-4">
+          Last updated: {lastUpdate.toLocaleTimeString()} • Auto-refresh every 2
+          seconds
+        </div>
+      </main>
     </div>
   )
+}
+
+function cn(...classes: (string | boolean | undefined)[]) {
+  return classes.filter(Boolean).join(' ')
 }

@@ -1,211 +1,262 @@
-import { createFileRoute, redirect } from '@tanstack/react-router'
-import { useState, useEffect, useCallback } from 'react'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
-import { OrderStatus } from '@ribatx/types'
-import { gatewayApi, kitchenApi, stockApi } from '@/lib/api-client'
-import { getValidToken, getStudentId } from '@/lib/auth'
+import { stockApi, gatewayApi } from '@/lib/api-client'
+import {
+  getValidToken,
+  getStudentId,
+  getStudentName,
+  clearToken,
+} from '@/lib/auth'
 import { useOrderStatus } from '@/hooks/useOrderStatus'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { MenuItemCard } from '@/components/student/menu-item-card'
+import { MenuItemSkeleton } from '@/components/ui/loading-skeleton'
+import { EmptyState } from '@/components/ui/empty-state'
+import { ConnectionIndicator } from '@/components/ui/connection-indicator'
+import { OrderStatusTimeline } from '@/components/ui/order-status-timeline'
+import { Confetti } from '@/components/ui/confetti'
+import { useSocket } from '@/hooks/useSocket'
+import {
+  Package,
+  LogOut,
+  CheckCircle2,
+  X,
+  Sparkles,
+  UtensilsCrossed,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
-
-// ─── Step tracker ────────────────────────────────────────────────────────────
-
-const STEPS: { status: OrderStatus; label: string }[] = [
-  { status: OrderStatus.PENDING, label: 'Pending' },
-  { status: OrderStatus.STOCK_VERIFIED, label: 'Stock Verified' },
-  { status: OrderStatus.IN_KITCHEN, label: 'In Kitchen' },
-  { status: OrderStatus.READY, label: 'Ready' },
-]
-
-const STATUS_INDEX: Record<OrderStatus, number> = {
-  [OrderStatus.PENDING]: 0,
-  [OrderStatus.STOCK_VERIFIED]: 1,
-  [OrderStatus.IN_KITCHEN]: 2,
-  [OrderStatus.READY]: 3,
-  [OrderStatus.FAILED]: -1,
-}
-
-function stepColor(idx: number, currentIdx: number, isFailed: boolean) {
-  if (isFailed)
-    return 'bg-destructive/20 text-destructive border-destructive/30'
-  if (idx < currentIdx) return 'bg-green-100 text-green-800 border-green-300'
-  if (idx === currentIdx) {
-    if (currentIdx === 3)
-      return 'animate-pulse bg-green-400 text-white border-green-500'
-    return 'bg-blue-100 text-blue-800 border-blue-300'
-  }
-  return 'bg-muted text-muted-foreground border-transparent'
-}
+import type { StockItem } from '@ribatx/types'
 
 export const Route = createFileRoute('/(student)/_layout/')({
-  beforeLoad: () => {
-    if (typeof window === 'undefined') return // SSR: skip
-    const token = getValidToken()
-    if (!token) throw redirect({ to: '/login' })
-  },
-  component: OrderDashboard,
+  component: StudentDashboard,
 })
 
-function OrderDashboard() {
+function StudentDashboard() {
+  const navigate = useNavigate()
   const token = getValidToken()
   const studentId = token ? getStudentId(token) : null
+  const studentName = token ? getStudentName(token) : null
 
-  const [orderId, setOrderId] = useState<string | null>(null)
-  const [placing, setPlacing] = useState(false)
-  const [placed, setPlaced] = useState(false)
+  const { connected } = useSocket(studentId)
 
-  // Fetch actual item ID from stock service on mount (avoids stale env var)
-  const [iftarBoxId, setIftarBoxId] = useState<string | null>(null)
+  const [items, setItems] = useState<StockItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [currentOrderId, setCurrentOrderId] = useState<string | null>(null)
+  const [orderingItemId, setOrderingItemId] = useState<string | null>(null)
+  const [showOrderModal, setShowOrderModal] = useState(false)
+  const [showConfetti, setShowConfetti] = useState(false)
+
+  const orderState = useOrderStatus(currentOrderId, studentId)
+
+  // Fetch menu items
   useEffect(() => {
-    stockApi
-      .items()
-      .then((items) => {
-        if (items?.[0]?.id) setIftarBoxId(items[0].id)
-      })
-      .catch(() => {
-        /* stock unreachable — order button stays disabled */
-      })
+    loadItems()
+    const interval = setInterval(loadItems, 5000) // Refresh every 5s
+    return () => clearInterval(interval)
   }, [])
 
-  // Poll kitchen queue length directly via kitchenApi (correct URL baked in)
-  const [queueData, setQueueData] = useState<{ total: number } | null>(null)
-  useEffect(() => {
-    const fetchQueue = () =>
-      kitchenApi
-        .queueLength()
-        .then(setQueueData)
-        .catch(() => {})
-    fetchQueue()
-    const id = setInterval(fetchQueue, 5000)
-    return () => clearInterval(id)
-  }, [])
-
-  const orderState = useOrderStatus(orderId, studentId)
-
-  const currentStatus =
-    orderState?.status ?? (placed ? OrderStatus.PENDING : null)
-  const currentIdx = currentStatus ? STATUS_INDEX[currentStatus] : -1
-  const isFailed = currentStatus === OrderStatus.FAILED
-
-  const handleOrder = useCallback(async () => {
-    if (placing || placed || !iftarBoxId) return
-    setPlacing(true)
-    // Optimistic: show button as "Placing..."
-    const idempotencyKey = `${studentId}-${Date.now()}`
+  async function loadItems() {
     try {
-      const res = await gatewayApi.placeOrder(iftarBoxId, idempotencyKey)
-      setOrderId(res.orderId)
-      setPlaced(true)
-      toast.success('Order placed! Waiting for kitchen…')
-    } catch (err: unknown) {
-      const status = (err as { status?: number }).status
-      const message = (err as { message?: string }).message ?? ''
-      if (status === 409) {
-        toast.error('Sorry, this item is sold out.')
-      } else if (status === 401) {
-        toast.error('Session expired. Please log in again.')
-      } else if (status === 503 && message.toLowerCase().includes('chaos')) {
-        toast.warning(
-          '⚠️ Service is in chaos mode — orders are temporarily disabled.',
-        )
-      } else if (status === 503) {
-        toast.error('A service is unavailable. Please try again shortly.')
-      } else {
-        toast.error('Order failed. Please try again.')
-      }
+      const data = await stockApi.items()
+      setItems(data)
+    } catch (error) {
+      console.error('Failed to load items:', error)
     } finally {
-      setPlacing(false)
+      setLoading(false)
     }
-  }, [placing, placed, studentId, iftarBoxId])
+  }
 
-  // Toast on READY
-  useEffect(() => {
-    if (currentStatus === OrderStatus.READY) {
-      toast.success('🍽️ Your order is ready for pickup!')
+  async function handleOrder(itemId: string) {
+    if (!token || orderingItemId) return
+
+    setOrderingItemId(itemId)
+    const idempotencyKey = `${studentId}-${Date.now()}`
+
+    try {
+      const order = await gatewayApi.placeOrder(itemId, idempotencyKey)
+      setCurrentOrderId(order.orderId)
+      setShowOrderModal(true)
+      setShowConfetti(true)
+
+      // Show success toast with confetti feel
+      toast.success('Order placed successfully!', {
+        description: 'Track your order status below',
+        duration: 3000,
+      })
+
+      // Refresh items to show updated stock
+      loadItems()
+    } catch (error: any) {
+      toast.error('Failed to place order', {
+        description: error.message || 'Please try again',
+      })
+    } finally {
+      setOrderingItemId(null)
     }
-  }, [currentStatus])
+  }
+
+  function handleSignOut() {
+    clearToken()
+    navigate({ to: '/login' })
+  }
+
+  if (!token) {
+    navigate({ to: '/login' })
+    return null
+  }
 
   return (
-    <div className="max-w-md mx-auto flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Order Iftar</h1>
-        {queueData && queueData.total > 0 && (
-          <Badge variant="outline" className="text-xs">
-            #{queueData.total} in queue
-          </Badge>
-        )}
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 relative overflow-hidden">
+      {/* Background decorations */}
+      <div className="absolute top-0 right-0 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
+      <div className="absolute bottom-0 left-0 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
 
-      {/* Order button */}
-      <Card>
-        <CardContent className="pt-6 flex flex-col items-center gap-4">
-          <Button
-            size="lg"
-            className={cn(
-              'w-full text-base transition-all',
-              placed && !isFailed && 'bg-green-600 hover:bg-green-700',
-            )}
-            onClick={handleOrder}
-            disabled={placing || placed || !iftarBoxId}
-          >
-            {placing
-              ? 'Placing Order…'
-              : placed
-                ? 'Order Placed ✓'
-                : '🥘 Order Iftar Box'}
-          </Button>
-          {!placed && (
-            <p className="text-xs text-muted-foreground text-center">
-              One Iftar Box per session. Pickup at the counter when ready.
-            </p>
-          )}
-        </CardContent>
-      </Card>
+      <Confetti
+        active={showConfetti}
+        onComplete={() => setShowConfetti(false)}
+      />
 
-      {/* Status tracker — only shown after order is placed */}
-      {placed && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Order Status</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isFailed ? (
-              <p className="text-sm text-destructive">
-                Something went wrong with your order. Please speak to a staff
-                member.
-              </p>
-            ) : (
-              <div className="flex items-center gap-2">
-                {STEPS.map((step, idx) => (
-                  <div
-                    key={step.status}
-                    className="flex items-center gap-2 flex-1 last:flex-none"
-                  >
-                    <div
-                      className={cn(
-                        'flex-1 text-center rounded-full border px-2 py-1 text-xs font-medium transition-all',
-                        stepColor(idx, currentIdx, isFailed),
-                      )}
-                    >
-                      {step.label}
-                    </div>
-                    {idx < STEPS.length - 1 && (
-                      <div
-                        className={cn(
-                          'h-px flex-shrink-0 w-3',
-                          idx < currentIdx ? 'bg-green-400' : 'bg-border',
-                        )}
-                      />
-                    )}
+      {/* Header */}
+      <header className="sticky top-0 z-50 border-b bg-card/80 backdrop-blur-xl supports-[backdrop-filter]:bg-card/60 shadow-sm">
+        <div className="container mx-auto px-4 sm:px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/60 shadow-lg shadow-primary/20">
+                <UtensilsCrossed className="h-5 w-5 text-primary-foreground" />
+              </div>
+              <div>
+                <h1 className="text-lg sm:text-xl font-bold flex items-center gap-2">
+                  Welcome, {studentName}
+                  <Sparkles className="h-4 w-4 text-yellow-400 animate-pulse" />
+                </h1>
+                <p className="text-xs sm:text-sm text-muted-foreground">
+                  Choose your delicious meal 🌙
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 sm:gap-3">
+              <ConnectionIndicator connected={connected} />
+              <button
+                onClick={handleSignOut}
+                className={cn(
+                  'p-2 rounded-lg transition-all duration-200',
+                  'hover:bg-muted hover:scale-110 active:scale-95',
+                  'focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2',
+                )}
+                title="Sign out"
+              >
+                <LogOut className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="container mx-auto px-4 sm:px-6 py-6 sm:py-8 pb-24 relative z-10">
+        {/* Active Order Status */}
+        {currentOrderId && orderState && showOrderModal && (
+          <div className="mb-8 relative group">
+            {/* Glow effect */}
+            <div className="absolute -inset-0.5 bg-gradient-to-r from-primary to-primary/50 rounded-2xl blur opacity-20 group-hover:opacity-30 transition duration-500" />
+
+            <div className="relative p-6 sm:p-8 rounded-2xl border bg-card/95 backdrop-blur-xl shadow-2xl animate-in fade-in slide-in-from-top-4 duration-500">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10">
+                    <Package className="h-5 w-5 text-primary" />
                   </div>
-                ))}
+                  <h2 className="text-xl font-bold">Your Order</h2>
+                </div>
+                <button
+                  onClick={() => setShowOrderModal(false)}
+                  className="p-2 rounded-lg hover:bg-muted transition-colors"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <OrderStatusTimeline
+                currentStatus={orderState.status}
+                position={orderState.position}
+              />
+
+              {orderState.status === 'READY' && (
+                <div className="mt-6 p-4 rounded-xl bg-gradient-to-r from-green-500/10 to-green-500/5 border border-green-500/20 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                  <div className="flex items-center justify-center w-10 h-10 rounded-full bg-green-500/20">
+                    <CheckCircle2 className="h-6 w-6 text-green-500" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-semibold text-green-500">
+                      Your order is ready!
+                    </p>
+                    <p className="text-sm text-green-500/80 mt-0.5">
+                      Please collect from the counter
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Menu Section */}
+        <div>
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-2xl font-bold flex items-center gap-2">
+                Today's Menu
+                <span className="text-2xl">🍽️</span>
+              </h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Fresh and delicious meals prepared with care
+              </p>
+            </div>
+            {!loading && items.length > 0 && (
+              <div className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20">
+                <span className="text-sm font-medium text-primary">
+                  {items.length} items available
+                </span>
               </div>
             )}
-          </CardContent>
-        </Card>
-      )}
+          </div>
+
+          {loading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+              {[...Array(8)].map((_, i) => (
+                <MenuItemSkeleton key={i} />
+              ))}
+            </div>
+          ) : items.length === 0 ? (
+            <div className="relative">
+              <div className="absolute -inset-0.5 bg-gradient-to-r from-primary/20 to-primary/10 rounded-2xl blur" />
+              <div className="relative bg-card/95 backdrop-blur-xl rounded-2xl border p-12">
+                <EmptyState
+                  icon={Package}
+                  title="No items available"
+                  description="The menu is currently empty. Please check back later or contact the cafeteria."
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+              {items.map((item, index) => (
+                <div
+                  key={item.id}
+                  className="animate-in fade-in slide-in-from-bottom-4 duration-500"
+                  style={{ animationDelay: `${index * 50}ms` }}
+                >
+                  <MenuItemCard
+                    item={item}
+                    onOrder={handleOrder}
+                    disabled={!!orderingItemId}
+                    isOrdering={orderingItemId === item.id}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </main>
     </div>
   )
 }

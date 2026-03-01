@@ -70,6 +70,7 @@ export type OrderResponseDto = z.infer<typeof OrderResponseSchema>;
 export interface StockItem {
   id: string;
   name: string;
+  price: number;
   quantity: number;
   version: number;
 }
@@ -88,20 +89,25 @@ export type DependencyStatus = "ok" | "unreachable";
 
 export interface HealthResponse {
   status: "ok" | "degraded";
-  service: ServiceName;
-  dependencies: {
+  service?: ServiceName;
+  uptime?: number;
+  timestamp?: string;
+  dependencies?: {
     postgres?: DependencyStatus;
     redis?: DependencyStatus;
   };
 }
 
 export interface MetricsResponse {
-  service: ServiceName;
-  uptime_seconds: number;
-  orders_total: number;
-  orders_failed: number;
-  avg_latency_ms: number;
-  p95_latency_ms: number;
+  service?: ServiceName;
+  throughput?: number;
+  latency?: number;
+  errorRate?: number;
+  uptime_seconds?: number;
+  orders_total?: number;
+  orders_failed?: number;
+  avg_latency_ms?: number;
+  p95_latency_ms?: number;
   cache_hits?: number;
   cache_misses?: number;
   queue_depth?: number;
