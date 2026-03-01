@@ -4,7 +4,15 @@ import { AppModule } from './app.module';
 import { PrismaClient } from './generated/prisma';
 
 async function seedItems(prisma: PrismaClient) {
-  // Ensure there is exactly one "Iftar Box" item without deleting unrelated items.
+  // Remove any stale items that are not "Iftar Box" (leftover from earlier schema).
+  const stale = await prisma.item.deleteMany({
+    where: { name: { not: 'Iftar Box' } },
+  });
+  if (stale.count > 0) {
+    console.log(`[stock] Removed ${stale.count} stale non-Iftar-Box item(s)`);
+  }
+
+  // Ensure there is exactly one "Iftar Box" item.
   const existingItems = await prisma.item.findMany({
     where: { name: 'Iftar Box' },
   });

@@ -184,17 +184,11 @@ function AdminDashboard() {
     stockApi
       .items()
       .then((items) => {
-        if (items?.[0]) {
-          setCurrentQty(items[0].quantity)
-        } else {
-          setCurrentQty(null)
-        }
+        const iftarBox =
+          items?.find((i) => i.name === 'Iftar Box') ?? items?.[0]
+        if (iftarBox) setCurrentQty(iftarBox.quantity)
       })
-      .catch((error) => {
-        console.error('Failed to load stock quantity', error)
-        setCurrentQty(null)
-        toast.error('Failed to load stock quantity')
-      })
+      .catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -204,9 +198,9 @@ function AdminDashboard() {
   }, [refreshStock])
 
   async function handleRestock() {
-    const qty = Number(restockQty)
-    if (!Number.isInteger(qty) || qty < 0) {
-      toast.error('Enter a valid non-negative integer')
+    const qty = parseInt(restockQty, 10)
+    if (isNaN(qty) || qty < 0) {
+      toast.error('Enter a valid non-negative number')
       return
     }
     setRestocking(true)
@@ -259,7 +253,7 @@ function AdminDashboard() {
       {/* Health Grid */}
       <section>
         <h2 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
-          Service Health
+          Service Healthhhh
         </h2>
         <Card>
           <CardContent className="pt-4 flex flex-wrap gap-4">
