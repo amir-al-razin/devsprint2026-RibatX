@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  CanActivate,
-  ExecutionContext,
-  ConflictException,
-} from '@nestjs/common';
+import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
 
@@ -23,16 +18,21 @@ export class IdempotencyGuard implements CanActivate {
     const result = await this.redis.get(key);
 
     if (result) {
-      // If we have a cached result, return it (mocking the actual response here)
-      // In a real scenario, you'd store the actual response body.
-      throw new ConflictException({
-        message: 'Duplicate request detected (Idempotent)',
-        cachedResult: JSON.parse(result),
-      });
+      // Duplicate request — return the cached response with 200 (idempotent)
+      const response = context.switchToHttp().getResponse();
+      response.status(200).json(JSON.parse(result));
+      return false;
     }
 
-    // Lock it temporarily (the actual service will update it with the result)
-    await this.redis.set(key, JSON.stringify({ status: 'PROCESSING' }), 'EX', 3600);
+    // First time — lock the key with a PROCESSING placeholder so concurrent
+    // duplicates also get a clean response. Service will overwrite this with
+    // the real result once the order is created.
+    await this.redis.set(
+      key,
+      JSON.stringify({ status: 'PROCESSING' }),
+      'EX',
+      3600,
+    );
 
     return true;
   }
