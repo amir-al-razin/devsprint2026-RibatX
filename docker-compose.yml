@@ -75,6 +75,7 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/order_db
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-internal-key}
       STOCK_SERVICE_URL: http://stock:3002
       KITCHEN_SERVICE_URL: http://kitchen:3003
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:4000}
@@ -154,6 +155,8 @@ services:
       PORT: 3004
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/notify_db
       REDIS_URL: redis://redis:6379
+      GATEWAY_SERVICE_URL: http://gateway:3000
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-internal-key}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:4000}
     depends_on:
       postgres:

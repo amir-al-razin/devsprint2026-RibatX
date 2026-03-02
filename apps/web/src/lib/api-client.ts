@@ -8,7 +8,7 @@ import type {
   MetricsResponse,
   StockItem,
 } from '@ribatx/types'
-import { getToken } from './auth'
+import { getValidToken } from './auth'
 
 // In dev these resolve through the Vite proxy.
 // In Docker / Railway use the injected env vars that point to real services.
@@ -38,7 +38,11 @@ async function request<T>(
   } = {},
 ): Promise<T> {
   const { skipAuth = false, extraHeaders = {}, ...fetchOpts } = options
-  const token = getToken()
+  const token = getValidToken()
+
+  if (!skipAuth && !token) {
+    throw { status: 401, message: 'Missing authentication token' } as ApiError
+  }
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -69,14 +73,14 @@ async function request<T>(
 
 export const identityApi = {
   register: (body: { studentId: string; name: string; password: string }) =>
-    request<AuthResponse>(IDENTITY_BASE, '/auth/register', {
+    request<AuthResponse>(GATEWAY_BASE, '/auth/register', {
       method: 'POST',
       skipAuth: true,
       body: JSON.stringify(body),
     }),
 
   login: (body: LoginRequest) =>
-    request<AuthResponse>(IDENTITY_BASE, '/auth/login', {
+    request<AuthResponse>(GATEWAY_BASE, '/auth/login', {
       method: 'POST',
       skipAuth: true,
       body: JSON.stringify(body),
@@ -103,6 +107,18 @@ export const gatewayApi = {
   getOrder: (orderId: string) =>
     request<OrderResponseDto>(GATEWAY_BASE, `/orders/${orderId}`),
 
+  getOrderTimeline: (orderId: string) =>
+    request<{
+      orderId: string
+      currentStatus: string
+      timeline: Array<{
+        status: string
+        at: string
+        source: string
+        traceId?: string
+      }>
+    }>(GATEWAY_BASE, `/orders/${orderId}/timeline`),
+
   health: () =>
     request<HealthResponse>(GATEWAY_BASE, '/health', { skipAuth: true }),
   metrics: () =>
@@ -125,6 +141,29 @@ export const gatewayApi = {
       GATEWAY_BASE,
       '/admin/stock/restock',
       { method: 'PATCH', body: JSON.stringify({ quantity }) },
+    ),
+
+  stockItems: () =>
+    request<StockItem[]>(GATEWAY_BASE, '/admin/observability/stock/items'),
+
+  serviceHealth: (
+    service: 'gateway' | 'identity' | 'stock' | 'kitchen' | 'notification',
+  ) =>
+    request<HealthResponse>(
+      GATEWAY_BASE,
+      `/admin/observability/health/${service}`,
+    ),
+
+  kitchenQueueLength: () =>
+    request<{ waiting: number; active: number; total: number }>(
+      GATEWAY_BASE,
+      '/admin/observability/kitchen/queue/length',
+    ),
+
+  kitchenQueueRecent: (limit = 10) =>
+    request<{ total: number; items: Array<unknown> }>(
+      GATEWAY_BASE,
+      `/admin/observability/kitchen/queue/recent?limit=${limit}`,
     ),
 }
 

@@ -3,6 +3,7 @@ import {
   ConflictException,
   ServiceUnavailableException,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { InjectRedis } from '@nestjs-modules/ioredis';
@@ -20,6 +21,17 @@ export class OrdersService {
     @InjectQueue('kitchen-orders') private kitchenQueue: Queue,
   ) {}
 
+  private readonly internalApiKey = process.env.INTERNAL_API_KEY;
+
+  verifyInternalApiKey(provided?: string) {
+    if (!this.internalApiKey) {
+      return;
+    }
+    if (!provided || provided !== this.internalApiKey) {
+      throw new UnauthorizedException('Invalid internal API key');
+    }
+  }
+
   /** Throws 503 if chaos mode is active for the given service */
   private async assertNoChaos(service: string) {
     const val = await this.redis.get(`chaos:${service}`);
@@ -35,8 +47,11 @@ export class OrdersService {
     itemId: string,
     idempotencyKey?: string,
   ) {
+    const pendingAt = new Date().toISOString();
+
     // 0. Chaos-mode gates
     await this.assertNoChaos('gateway');
+    await this.assertNoChaos('kitchen');
     await this.assertNoChaos('stock');
 
     // 1. Check Redis cache first (resilience/speed)
@@ -62,9 +77,6 @@ export class OrdersService {
         .toString(36)
         .slice(2, 8)}`;
 
-      // 3. Chaos gate for kitchen before enqueue
-      await this.assertNoChaos('kitchen');
-
       // 4. HAND OFF TO KITCHEN QUEUE (Day 2/3 Feature)
       await this.kitchenQueue.add('cook-order', {
         orderId,
@@ -75,18 +87,33 @@ export class OrdersService {
 
       const orderResult = {
         orderId,
-        status: 'PENDING',
+        status: 'STOCK_VERIFIED',
         message: 'Order received and sent to kitchen',
       };
 
       // 5. Persist order in Redis so GET /orders/:id can look it up
+      const verifiedAt = new Date().toISOString();
       const orderPayload = {
         orderId,
         traceId,
-        status: 'PENDING',
+        status: 'STOCK_VERIFIED',
         studentId,
         itemId,
         createdAt: new Date().toISOString(),
+        timeline: [
+          {
+            status: 'PENDING',
+            at: pendingAt,
+            source: 'gateway',
+            traceId,
+          },
+          {
+            status: 'STOCK_VERIFIED',
+            at: verifiedAt,
+            source: 'gateway',
+            traceId,
+          },
+        ],
       };
       await this.redis.setex(
         `order:${orderId}`,
@@ -128,5 +155,85 @@ export class OrdersService {
       throw new NotFoundException(`Order ${orderId} not found`);
     }
     return JSON.parse(raw);
+  }
+
+  async getOrderTimeline(orderId: string) {
+    const raw = await this.redis.get(`order:${orderId}`);
+    if (!raw) {
+      throw new NotFoundException(`Order ${orderId} not found`);
+    }
+
+    const order = JSON.parse(raw) as {
+      orderId: string;
+      status: string;
+      traceId?: string;
+      timeline?: Array<{
+        status: string;
+        at: string;
+        source: string;
+        traceId?: string;
+      }>;
+    };
+
+    return {
+      orderId: order.orderId,
+      currentStatus: order.status,
+      timeline: order.timeline ?? [],
+    };
+  }
+
+  async updateOrderStatus(
+    orderId: string,
+    status: string,
+    source: string,
+    traceId?: string,
+  ) {
+    const raw = await this.redis.get(`order:${orderId}`);
+    if (!raw) {
+      throw new NotFoundException(`Order ${orderId} not found`);
+    }
+
+    const now = new Date().toISOString();
+    const order = JSON.parse(raw) as {
+      orderId: string;
+      status: string;
+      traceId?: string;
+      timeline?: Array<{
+        status: string;
+        at: string;
+        source: string;
+        traceId?: string;
+      }>;
+    };
+
+    const timeline = Array.isArray(order.timeline) ? order.timeline : [];
+    const last = timeline[timeline.length - 1];
+    if (last?.status !== status) {
+      timeline.push({
+        status,
+        at: now,
+        source,
+        traceId: traceId ?? order.traceId,
+      });
+    }
+
+    const nextOrder = {
+      ...order,
+      status,
+      updatedAt: now,
+      timeline,
+    };
+
+    await this.redis.setex(
+      `order:${orderId}`,
+      86400,
+      JSON.stringify(nextOrder),
+    );
+
+    return {
+      orderId,
+      status,
+      updatedAt: now,
+    };
   }
 }

@@ -27,8 +27,8 @@ import {
 } from 'recharts'
 import { ServiceName } from '@ribatx/types'
 import type { HealthResponse, MetricsResponse } from '@ribatx/types'
-import { gatewayApi, stockApi } from '@/lib/api-client'
-import { getValidToken } from '@/lib/auth'
+import { gatewayApi } from '@/lib/api-client'
+import { getValidToken, isAdmin } from '@/lib/auth'
 import { useMetricsPoller } from '@/hooks/useMetricsPoller'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -42,23 +42,32 @@ import { cn } from '@/lib/utils'
 
 const env = (import.meta as ImportMeta & { env: Record<string, string> }).env
 
-function svcUrl(envKey: string, fallbackPort: number, path: string): string {
-  const base = env[envKey] ?? `http://localhost:${fallbackPort}`
-  return `${base}${path}`
+const GATEWAY_BASE = env.VITE_GATEWAY_URL ?? '/api'
+
+function gatewayUrl(path: string): string {
+  return `${GATEWAY_BASE}${path}`
 }
 
 const HEALTH_URLS: Record<string, string> = {
-  gateway: svcUrl('VITE_GATEWAY_URL', 3000, '/health'),
-  identity: svcUrl('VITE_IDENTITY_URL', 3001, '/health'),
-  stock: svcUrl('VITE_STOCK_URL', 3002, '/health'),
-  kitchen: svcUrl('VITE_KITCHEN_URL', 3003, '/health'),
-  notification: svcUrl('VITE_NOTIFICATION_URL', 3004, '/health'),
+  gateway: gatewayUrl('/admin/observability/health/gateway'),
+  identity: gatewayUrl('/admin/observability/health/identity'),
+  stock: gatewayUrl('/admin/observability/health/stock'),
+  kitchen: gatewayUrl('/admin/observability/health/kitchen'),
+  notification: gatewayUrl('/admin/observability/health/notification'),
 }
 
-const GATEWAY_METRICS_URL = `${env.VITE_GATEWAY_URL ?? 'http://localhost:3000'}/metrics`
+const GATEWAY_METRICS_URL = gatewayUrl('/metrics')
+
+const SERVICE_METRICS_URLS = {
+  identity: `${env.VITE_IDENTITY_URL ?? 'http://localhost:3001'}/metrics`,
+  stock: `${env.VITE_STOCK_URL ?? 'http://localhost:3002'}/metrics`,
+  kitchen: `${env.VITE_KITCHEN_URL ?? 'http://localhost:3003'}/metrics`,
+  notification: `${env.VITE_NOTIFICATION_URL ?? 'http://localhost:3004'}/metrics`,
+} as const
 
 const CHAOS_SERVICES = [
   ServiceName.GATEWAY,
+  ServiceName.IDENTITY,
   ServiceName.STOCK,
   ServiceName.KITCHEN,
   ServiceName.NOTIFICATION,
@@ -92,6 +101,21 @@ interface KitchenQueueItem {
   createdAt: string
 }
 
+interface ServiceTelemetryMetrics {
+  uptime_seconds: number
+  orders_total: number
+  orders_failed: number
+  avg_latency_ms: number
+  p95_latency_ms: number
+}
+
+function formatUptimeCompact(seconds: number | null): string {
+  if (seconds == null) return '—'
+  if (seconds < 60) return `${seconds}s`
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`
+  return `${Math.floor(seconds / 3600)}h`
+}
+
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
 function HealthDot({
@@ -106,18 +130,31 @@ function HealthDot({
     status: 'healthy' | 'down'
   }) => void
 }) {
-  const data = useMetricsPoller<HealthResponse>(url, 5000)
+  const token = getValidToken()
+  const data = useMetricsPoller<HealthResponse>(
+    url,
+    5000,
+    token
+      ? {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      : undefined,
+    Boolean(token),
+  )
 
   // Use the typed api-client so the Authorization header is sent when present
   const [chaosMode, setChaosMode] = useState<'ON' | 'OFF' | null>(null)
   const pollChaos = useCallback(async () => {
+    if (!token) return
     try {
       const result = await gatewayApi.getChaosStatus(service)
       setChaosMode(result.chaosMode)
     } catch {
       // silently ignore — endpoint may not be guarded yet
     }
-  }, [service])
+  }, [service, token])
   useEffect(() => {
     pollChaos()
     const timer = setInterval(pollChaos, 3000)
@@ -125,18 +162,21 @@ function HealthDot({
   }, [pollChaos])
 
   const lastHealthRef = useRef<'healthy' | 'down' | null>(null)
+  const isChaos = chaosMode === 'ON'
+  const ok = data?.status === 'ok' && !isChaos
+
   useEffect(() => {
-    const next =
-      data === null ? null : data.status === 'ok' ? 'healthy' : 'down'
+    const next = data === null ? null : ok ? 'healthy' : 'down'
     if (!next) return
     if (lastHealthRef.current !== next) {
       onHealthChange?.({ service, status: next })
       lastHealthRef.current = next
     }
-  }, [data, onHealthChange, service])
+  }, [data, ok, onHealthChange, service])
 
-  const ok = data?.status === 'ok'
-  const isChaos = chaosMode === 'ON'
+  const statusText =
+    data === null ? 'connecting' : isChaos ? 'chaos' : ok ? 'healthy' : 'down'
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -174,13 +214,8 @@ function HealthDot({
               : 'bg-destructive/12 text-destructive',
         )}
       >
-        {data === null ? 'connecting' : ok ? 'healthy' : 'down'}
+        {statusText}
       </span>
-      {isChaos && (
-        <Badge className="bg-primary/14 text-primary hover:bg-primary/20 text-[10px] uppercase ml-1.5 rounded-md">
-          Chaos
-        </Badge>
-      )}
     </motion.div>
   )
 }
@@ -244,13 +279,40 @@ export const Route = createFileRoute('/admin/_layout/')({
     if (typeof window === 'undefined') return // SSR: skip
     const token = getValidToken()
     if (!token) throw redirect({ to: '/login' })
+    if (!isAdmin(token)) throw redirect({ to: '/unauthorized' })
   },
   component: AdminDashboard,
 })
 
 function AdminDashboard() {
+  const adminToken = getValidToken()
+  const authFetchOptions = adminToken
+    ? ({
+        headers: {
+          Authorization: `Bearer ${adminToken}`,
+        },
+      } as RequestInit)
+    : undefined
+
   // Gateway metrics polled every 3s
   const metrics = useMetricsPoller<MetricsResponse>(GATEWAY_METRICS_URL, 3000)
+
+  const identityMetrics = useMetricsPoller<ServiceTelemetryMetrics>(
+    SERVICE_METRICS_URLS.identity,
+    3000,
+  )
+  const stockMetrics = useMetricsPoller<ServiceTelemetryMetrics>(
+    SERVICE_METRICS_URLS.stock,
+    3000,
+  )
+  const kitchenMetrics = useMetricsPoller<ServiceTelemetryMetrics>(
+    SERVICE_METRICS_URLS.kitchen,
+    3000,
+  )
+  const notificationMetrics = useMetricsPoller<ServiceTelemetryMetrics>(
+    SERVICE_METRICS_URLS.notification,
+    3000,
+  )
 
   // Rolling 60-point cache hit/miss chart buffer
   const [chartData, setChartData] = useState<Array<CachePoint>>([])
@@ -290,8 +352,8 @@ function AdminDashboard() {
 
   // Load current stock quantity on mount and after a successful restock
   const refreshStock = useCallback(() => {
-    stockApi
-      .items()
+    gatewayApi
+      .stockItems()
       .then((items) => {
         const iftarBox =
           items?.find((i) => i.name === 'Iftar Box') ?? items?.[0]
@@ -413,12 +475,22 @@ function AdminDashboard() {
     waiting: number
     active: number
     total: number
-  }>(svcUrl('VITE_KITCHEN_URL', 3003, '/queue/length'), 3000)
+  }>(
+    gatewayUrl('/admin/observability/kitchen/queue/length'),
+    3000,
+    authFetchOptions,
+    Boolean(adminToken),
+  )
 
   const kitchenRecent = useMetricsPoller<{
     total: number
     items: Array<KitchenQueueItem>
-  }>(svcUrl('VITE_KITCHEN_URL', 3003, '/queue/recent?limit=10'), 3000)
+  }>(
+    gatewayUrl('/admin/observability/kitchen/queue/recent?limit=10'),
+    3000,
+    authFetchOptions,
+    Boolean(adminToken),
+  )
 
   const [healthSnapshot, setHealthSnapshot] = useState<Record<string, boolean>>(
     () =>
@@ -428,13 +500,15 @@ function AdminDashboard() {
   )
 
   useEffect(() => {
+    if (!adminToken) return
+
     let active = true
 
     const pollHealth = async () => {
       const entries = await Promise.all(
         Object.entries(HEALTH_URLS).map(async ([service, url]) => {
           try {
-            const res = await fetch(url)
+            const res = await fetch(url, authFetchOptions)
             const data = (await res.json()) as HealthResponse
             return [service, data.status === 'ok'] as const
           } catch {
@@ -453,9 +527,11 @@ function AdminDashboard() {
       active = false
       clearInterval(timer)
     }
-  }, [])
+  }, [adminToken, authFetchOptions])
 
   useEffect(() => {
+    if (!adminToken) return
+
     let active = true
 
     const syncChaosState = async () => {
@@ -483,7 +559,7 @@ function AdminDashboard() {
       active = false
       clearInterval(timer)
     }
-  }, [])
+  }, [adminToken])
 
   async function handleChaosToggle(service: ServiceName, enabled: boolean) {
     setChaosState((prev) => ({ ...prev, [service]: enabled }))
@@ -519,6 +595,7 @@ function AdminDashboard() {
       targets[ServiceName.KITCHEN] = true
     } else {
       targets[ServiceName.GATEWAY] = true
+      targets[ServiceName.IDENTITY] = true
       targets[ServiceName.STOCK] = true
       targets[ServiceName.KITCHEN] = true
       targets[ServiceName.NOTIFICATION] = true
@@ -1062,6 +1139,49 @@ function AdminDashboard() {
                 title="Cache Misses"
                 value={metrics?.cache_misses ?? null}
                 delay={0.6}
+              />
+            </div>
+          </section>
+
+          <section>
+            <div className="flex items-center gap-2 mb-4">
+              <Activity size={18} className="text-primary" />
+              <h2 className="font-semibold text-foreground tracking-wide">
+                Service Telemetry
+              </h2>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <MetricCard
+                title="Identity Uptime"
+                value={formatUptimeCompact(
+                  identityMetrics?.uptime_seconds ?? null,
+                )}
+                icon={Clock}
+                delay={0.1}
+              />
+              <MetricCard
+                title="Stock Uptime"
+                value={formatUptimeCompact(
+                  stockMetrics?.uptime_seconds ?? null,
+                )}
+                icon={Clock}
+                delay={0.15}
+              />
+              <MetricCard
+                title="Kitchen Uptime"
+                value={formatUptimeCompact(
+                  kitchenMetrics?.uptime_seconds ?? null,
+                )}
+                icon={Clock}
+                delay={0.2}
+              />
+              <MetricCard
+                title="Notification Uptime"
+                value={formatUptimeCompact(
+                  notificationMetrics?.uptime_seconds ?? null,
+                )}
+                icon={Clock}
+                delay={0.25}
               />
             </div>
           </section>
