@@ -9,9 +9,9 @@ export class NotificationController {
   @Patch('notify/:orderId')
   notifyOrder(
     @Param('orderId') orderId: string,
-    @Body() body: { status: string; studentId: string },
+    @Body() body: { status: string; studentId: string; traceId?: string },
   ) {
-    this.gateway.sendUpdate(body.studentId, orderId, body.status);
+    this.gateway.sendUpdate(body.studentId, orderId, body.status, body.traceId);
     return { success: true };
   }
 }

@@ -8,7 +8,7 @@ export class OrdersProcessor extends WorkerHost {
   private readonly logger = new Logger(OrdersProcessor.name);
 
   async process(job: Job<any, any, string>): Promise<any> {
-    const { orderId, studentId, itemId } = job.data;
+    const { orderId, studentId, itemId, traceId } = job.data;
     this.logger.log(`Processing order ${orderId} for student ${studentId}...`);
 
     const notificationUrl =
@@ -19,6 +19,7 @@ export class OrdersProcessor extends WorkerHost {
       await axios.patch(`${notificationUrl}/notify/${orderId}`, {
         status: 'IN_KITCHEN',
         studentId,
+        traceId,
       });
       this.logger.log(`Order ${orderId} marked IN_KITCHEN`);
     } catch (error) {
@@ -38,6 +39,7 @@ export class OrdersProcessor extends WorkerHost {
       await axios.patch(`${notificationUrl}/notify/${orderId}`, {
         status: 'READY',
         studentId,
+        traceId,
       });
     } catch (error) {
       this.logger.error(

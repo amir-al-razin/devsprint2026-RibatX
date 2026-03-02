@@ -64,6 +64,8 @@ const CHAOS_SERVICES = [
   ServiceName.NOTIFICATION,
 ] as const
 
+const INCIDENT_TIMELINE_STORAGE_KEY = 'admin:incident-timeline:v1'
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 interface CachePoint {
@@ -79,6 +81,15 @@ interface IncidentEvent {
   kind: 'health' | 'chaos'
   message: string
   severity: 'info' | 'warning' | 'critical'
+}
+
+interface KitchenQueueItem {
+  orderId: string
+  studentId?: string
+  itemId?: string
+  traceId?: string
+  state: 'waiting' | 'active'
+  createdAt: string
 }
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
@@ -321,6 +332,31 @@ function AdminDashboard() {
     Array<IncidentEvent>
   >([])
 
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(INCIDENT_TIMELINE_STORAGE_KEY)
+      if (!raw) return
+
+      const parsed = JSON.parse(raw) as Array<IncidentEvent>
+      if (Array.isArray(parsed)) {
+        setIncidentTimeline(parsed.slice(0, 30))
+      }
+    } catch {
+      // ignore corrupted localStorage data
+    }
+  }, [])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        INCIDENT_TIMELINE_STORAGE_KEY,
+        JSON.stringify(incidentTimeline.slice(0, 30)),
+      )
+    } catch {
+      // ignore storage quota / access issues
+    }
+  }, [incidentTimeline])
+
   const pushIncident = useCallback(
     (
       entry:
@@ -378,6 +414,46 @@ function AdminDashboard() {
     active: number
     total: number
   }>(svcUrl('VITE_KITCHEN_URL', 3003, '/queue/length'), 3000)
+
+  const kitchenRecent = useMetricsPoller<{
+    total: number
+    items: Array<KitchenQueueItem>
+  }>(svcUrl('VITE_KITCHEN_URL', 3003, '/queue/recent?limit=10'), 3000)
+
+  const [healthSnapshot, setHealthSnapshot] = useState<Record<string, boolean>>(
+    () =>
+      Object.fromEntries(
+        Object.keys(HEALTH_URLS).map((service) => [service, false]),
+      ),
+  )
+
+  useEffect(() => {
+    let active = true
+
+    const pollHealth = async () => {
+      const entries = await Promise.all(
+        Object.entries(HEALTH_URLS).map(async ([service, url]) => {
+          try {
+            const res = await fetch(url)
+            const data = (await res.json()) as HealthResponse
+            return [service, data.status === 'ok'] as const
+          } catch {
+            return [service, false] as const
+          }
+        }),
+      )
+
+      if (!active) return
+      setHealthSnapshot(Object.fromEntries(entries))
+    }
+
+    pollHealth()
+    const timer = setInterval(pollHealth, 5000)
+    return () => {
+      active = false
+      clearInterval(timer)
+    }
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -475,6 +551,49 @@ function AdminDashboard() {
   )
   const queueState =
     queueTotal >= 8 ? 'critical' : queueTotal >= 4 ? 'busy' : 'healthy'
+
+  const healthyCount = Object.values(healthSnapshot).filter(Boolean).length
+  const uptimePct = Math.round(
+    (healthyCount / Object.keys(HEALTH_URLS).length) * 100,
+  )
+
+  const latencyRisk =
+    metrics == null
+      ? 'unknown'
+      : metrics.p95_latency_ms > 1200 || metrics.avg_latency_ms > 1000
+        ? 'high'
+        : metrics.p95_latency_ms > 700 || metrics.avg_latency_ms > 500
+          ? 'medium'
+          : 'low'
+
+  const latestCacheRatio =
+    chartData.length > 0
+      ? (chartData[chartData.length - 1].hits /
+          Math.max(
+            1,
+            chartData[chartData.length - 1].hits +
+              chartData[chartData.length - 1].misses,
+          )) *
+        100
+      : null
+  const previousCacheRatio =
+    chartData.length > 1
+      ? (chartData[chartData.length - 2].hits /
+          Math.max(
+            1,
+            chartData[chartData.length - 2].hits +
+              chartData[chartData.length - 2].misses,
+          )) *
+        100
+      : null
+  const cacheTrend =
+    latestCacheRatio == null || previousCacheRatio == null
+      ? 'stable'
+      : latestCacheRatio - previousCacheRatio > 0.3
+        ? 'up'
+        : previousCacheRatio - latestCacheRatio > 0.3
+          ? 'down'
+          : 'stable'
 
   return (
     <motion.div
@@ -619,6 +738,75 @@ function AdminDashboard() {
             </Card>
           </section>
 
+          {/* Live Kitchen Queue Board */}
+          <section>
+            <div className="flex items-center gap-2 mb-4">
+              <Package size={18} className="text-primary" />
+              <h2 className="font-semibold text-foreground tracking-wide">
+                Live Kitchen Queue (Top 10)
+              </h2>
+            </div>
+            <Card className="bg-card">
+              <CardContent className="p-5">
+                {kitchenRecent?.items?.length ? (
+                  <div className="overflow-x-auto pb-2">
+                    <div className="flex gap-3 min-w-max">
+                      {kitchenRecent.items.map((item) => (
+                        <div
+                          key={`${item.orderId}-${item.createdAt}`}
+                          className="w-[220px] rounded-lg border border-border bg-secondary/35 p-3.5 text-left transition-colors hover:bg-secondary/55"
+                        >
+                          <div className="flex items-center justify-between gap-2 mb-2">
+                            <Badge
+                              className={cn(
+                                'uppercase text-[10px]',
+                                item.state === 'active'
+                                  ? 'bg-primary/15 text-primary hover:bg-primary/20'
+                                  : 'bg-secondary text-muted-foreground hover:bg-secondary',
+                              )}
+                            >
+                              {item.state}
+                            </Badge>
+                            <span className="text-[11px] text-muted-foreground">
+                              {new Date(item.createdAt).toLocaleTimeString(
+                                'en-GB',
+                                {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                  second: '2-digit',
+                                },
+                              )}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground uppercase tracking-wider">
+                            Order
+                          </p>
+                          <p className="text-sm font-medium break-all">
+                            {item.orderId}
+                          </p>
+                          {item.traceId && (
+                            <p className="text-[11px] text-muted-foreground mt-1 break-all">
+                              Trace: {item.traceId}
+                            </p>
+                          )}
+                          {item.studentId && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Student: {item.studentId}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No active queue items right now.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          </section>
+
           {/* Iftar Box Restock */}
           <section>
             <div className="flex items-center gap-2 mb-4">
@@ -742,6 +930,82 @@ function AdminDashboard() {
 
         {/* Right Column: Metrics & Charts */}
         <div className="flex flex-col gap-8 lg:col-span-2">
+          {/* SLO Cards */}
+          <section>
+            <div className="flex items-center gap-2 mb-4">
+              <Activity size={18} className="text-primary" />
+              <h2 className="font-semibold text-foreground tracking-wide">
+                SLO Overview
+              </h2>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <Card className="bg-card">
+                <CardContent className="p-5">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Rolling Uptime
+                  </p>
+                  <p className="text-3xl font-bold tabular-nums text-foreground mt-1">
+                    {uptimePct}%
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-card">
+                <CardContent className="p-5">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Latency Risk
+                  </p>
+                  <div className="mt-2">
+                    <Badge
+                      className={cn(
+                        'uppercase',
+                        latencyRisk === 'high'
+                          ? 'bg-destructive/15 text-destructive hover:bg-destructive/20'
+                          : latencyRisk === 'medium'
+                            ? 'bg-primary/15 text-primary hover:bg-primary/20'
+                            : latencyRisk === 'low'
+                              ? 'bg-green-500/15 text-green-500 hover:bg-green-500/20'
+                              : 'bg-secondary text-muted-foreground hover:bg-secondary',
+                      )}
+                    >
+                      {latencyRisk}
+                    </Badge>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-card">
+                <CardContent className="p-5">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Cache Efficiency
+                  </p>
+                  <div className="mt-1 flex items-end gap-2">
+                    <p className="text-3xl font-bold tabular-nums text-foreground">
+                      {latestCacheRatio == null
+                        ? '—'
+                        : latestCacheRatio.toFixed(1)}
+                    </p>
+                    <span className="text-sm text-muted-foreground mb-1">
+                      %
+                    </span>
+                    <Badge
+                      className={cn(
+                        'uppercase text-[10px] mb-1',
+                        cacheTrend === 'up'
+                          ? 'bg-green-500/15 text-green-500 hover:bg-green-500/20'
+                          : cacheTrend === 'down'
+                            ? 'bg-destructive/15 text-destructive hover:bg-destructive/20'
+                            : 'bg-secondary text-muted-foreground hover:bg-secondary',
+                      )}
+                    >
+                      {cacheTrend}
+                    </Badge>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </section>
+
           {/* Metrics Panel */}
           <section>
             <div className="flex items-center gap-2 mb-4">
