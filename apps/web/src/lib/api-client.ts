@@ -103,6 +103,18 @@ export const gatewayApi = {
   getOrder: (orderId: string) =>
     request<OrderResponseDto>(GATEWAY_BASE, `/orders/${orderId}`),
 
+  getOrderTimeline: (orderId: string) =>
+    request<{
+      orderId: string
+      currentStatus: string
+      timeline: Array<{
+        status: string
+        at: string
+        source: string
+        traceId?: string
+      }>
+    }>(GATEWAY_BASE, `/orders/${orderId}/timeline`),
+
   health: () =>
     request<HealthResponse>(GATEWAY_BASE, '/health', { skipAuth: true }),
   metrics: () =>

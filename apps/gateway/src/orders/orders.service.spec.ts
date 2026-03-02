@@ -51,7 +51,7 @@ describe('OrdersService', () => {
       expect(redis.incr).toHaveBeenCalledWith('metrics:cache:hits');
     });
 
-    it('returns PENDING order and enqueues kitchen job when stock is available', async () => {
+    it('returns STOCK_VERIFIED order and enqueues kitchen job when stock is available', async () => {
       redis.get.mockResolvedValue('5');
       httpService.post.mockReturnValue(
         of({ data: { reserved: true, remaining: 4 } } as AxiosResponse),
@@ -59,7 +59,7 @@ describe('OrdersService', () => {
 
       const result = await service.createOrder('student-1', 'item-1');
 
-      expect(result.status).toBe('PENDING');
+      expect(result.status).toBe('STOCK_VERIFIED');
       expect(result.orderId).toMatch(/^ORD-/);
       expect(kitchenQueue.add).toHaveBeenCalledWith(
         'cook-order',
@@ -80,7 +80,7 @@ describe('OrdersService', () => {
 
       const result = await service.createOrder('student-2', 'item-1');
 
-      expect(result.status).toBe('PENDING');
+      expect(result.status).toBe('STOCK_VERIFIED');
       expect(httpService.post).toHaveBeenCalled();
       expect(redis.incr).toHaveBeenCalledWith('metrics:cache:misses');
     });
