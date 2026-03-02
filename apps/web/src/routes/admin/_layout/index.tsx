@@ -81,6 +81,15 @@ interface IncidentEvent {
   severity: 'info' | 'warning' | 'critical'
 }
 
+interface KitchenQueueItem {
+  orderId: string
+  studentId?: string
+  itemId?: string
+  traceId?: string
+  state: 'waiting' | 'active'
+  createdAt: string
+}
+
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
 function HealthDot({
@@ -379,6 +388,11 @@ function AdminDashboard() {
     total: number
   }>(svcUrl('VITE_KITCHEN_URL', 3003, '/queue/length'), 3000)
 
+  const kitchenRecent = useMetricsPoller<{
+    total: number
+    items: Array<KitchenQueueItem>
+  }>(svcUrl('VITE_KITCHEN_URL', 3003, '/queue/recent?limit=10'), 3000)
+
   useEffect(() => {
     let active = true
 
@@ -615,6 +629,70 @@ function AdminDashboard() {
                     </p>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+          </section>
+
+          {/* Live Kitchen Queue Board */}
+          <section>
+            <div className="flex items-center gap-2 mb-4">
+              <Package size={18} className="text-primary" />
+              <h2 className="font-semibold text-foreground tracking-wide">
+                Live Kitchen Queue (Top 10)
+              </h2>
+            </div>
+            <Card className="bg-card">
+              <CardContent className="p-5">
+                {kitchenRecent?.items?.length ? (
+                  <div className="overflow-x-auto pb-2">
+                    <div className="flex gap-3 min-w-max">
+                      {kitchenRecent.items.map((item) => (
+                        <div
+                          key={`${item.orderId}-${item.createdAt}`}
+                          className="w-[220px] rounded-lg border border-border bg-secondary/35 p-3.5"
+                        >
+                          <div className="flex items-center justify-between gap-2 mb-2">
+                            <Badge
+                              className={cn(
+                                'uppercase text-[10px]',
+                                item.state === 'active'
+                                  ? 'bg-primary/15 text-primary hover:bg-primary/20'
+                                  : 'bg-secondary text-muted-foreground hover:bg-secondary',
+                              )}
+                            >
+                              {item.state}
+                            </Badge>
+                            <span className="text-[11px] text-muted-foreground">
+                              {new Date(item.createdAt).toLocaleTimeString(
+                                'en-GB',
+                                {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                  second: '2-digit',
+                                },
+                              )}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground uppercase tracking-wider">
+                            Order
+                          </p>
+                          <p className="text-sm font-medium break-all">
+                            {item.orderId}
+                          </p>
+                          {item.studentId && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Student: {item.studentId}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No active queue items right now.
+                  </p>
+                )}
               </CardContent>
             </Card>
           </section>
