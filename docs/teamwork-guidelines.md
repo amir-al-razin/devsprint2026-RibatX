@@ -4,6 +4,12 @@
 
 ---
 
+## Team Members
+
+- **amir-al-razin**
+- **safwansatil**
+- **j-shifat-18**
+
 ## Team Split & Ownership
 
 ### Why service ownership — not layer split

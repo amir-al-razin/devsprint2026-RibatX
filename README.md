@@ -1,155 +1,73 @@
-# devsprint2026-RibatX
+# RibatX Cafeteria System — IUT DevSprint 2026
 
-IUT Cafeteria ordering system — DevSprint 2026 hackathon project..
-Turborepo monorepo · 5 NestJS microservices · TanStack Start frontend · PostgreSQL · Redis · BullMQ
+> **A resilient, microservices-based cafeteria ordering platform designed for high-concurrency events like Iftar.**
 
----
-
-## Stack
-
-| Layer         | Tech                                |
-| ------------- | ----------------------------------- |
-| Frontend      | TanStack Start + ShadCN (port 4000) |
-| Gateway       | NestJS (port 3000)                  |
-| Identity      | NestJS — JWT auth (port 3001)       |
-| Stock         | NestJS — inventory (port 3002)      |
-| Kitchen       | NestJS — BullMQ queue (port 3003)   |
-| Notification  | NestJS — Socket.io (port 3004)      |
-| Database      | PostgreSQL 15 — 5 logical DBs       |
-| Cache / Queue | Redis                               |
+RibatX is a production-grade ordering system built with NestJS, TanStack Start, and PostgreSQL. It addresses the challenges of manual cafeteria coordination by providing a seamless, automated flow from order placement to real-time status notifications.
 
 ---
 
-## Prerequisites
+## 📖 Project Documentation
+
+For a deep dive into the system's requirements, architecture, and technology choices, please refer to the following documentation:
+
+- **[Project Summary](project-summary.md)**: A one-page overview for judges and reviewers.
+- **[Requirement Analysis](requirement-analysis.md)**: Detailed breakdown of goals, functional/non-functional requirements, and use cases.
+- **[System Architecture](system-architecture.md)**: Comprehensive description of microservices interaction, data flow, and security.
+- **[Tools & Stack Report](tools-and-stack.md)**: Detailed analysis of the technologies used, justifications, and our **AI Usage Disclosure**.
+- **[Architecture Diagram](assets/mermaid-diagrams.md)**: Visual representation of the system using Mermaid charts.
+
+---
+
+## 🚀 Key Features
+
+- **Asynchronous Fulfillment**: Orders are processed via **BullMQ** to ensure system stability during traffic spikes.
+- **Strict Inventory Integrity**: **Optimistic locking** in the Stock service (PostgreSQL) prevents overselling.
+- **Real-time Visibility**: Live order tracking powered by **Socket.io** WebSockets.
+- **Resilience Engineering**: Built-in **Idempotency Guard** and **Chaos Mode** for testing system failure handling.
+- **Type-Safe Fullstack**: Unified TypeScript monorepo using **Turborepo** for shared data contracts.
+
+---
+
+## 🛠️ Quick Start
+
+### Prerequisites
 
 - Node.js ≥ 20
-- pnpm ≥ 10 — `npm i -g pnpm`
+- pnpm ≥ 10
 - Docker + Docker Compose
 
----
-
-## Getting Started
+### Fast Setup
 
 ```bash
-# 1. Clone
-git clone https://github.com/amir-al-razin/devsprint2026-RibatX.git
-cd devsprint2026-RibatX
-
-# 2. Install all workspace dependencies
+# 1. Install dependencies
 pnpm install
 
-# 3. Copy env and fill in secrets
+# 2. Setup environment
 cp .env.example .env
 
-# 4. Start infrastructure (Postgres + Redis)
+# 3. Start infrastructure (Postgres + Redis)
 docker compose up postgres redis -d
 
-# 5. Build shared packages
+# 4. Initialize and start dev services
 pnpm turbo build --filter="./packages/*"
-
-# 6. Start all services in dev mode
 pnpm turbo dev
 ```
 
-> **Note — iptables error on first Docker run:**  
-> If you see `iptables: Chain 'DOCKER-ISOLATION-STAGE-2' does not exist`, run:
->
-> ```bash
-> sudo iptables -N DOCKER-ISOLATION-STAGE-2 && sudo iptables -N DOCKER-ISOLATION-STAGE-1
-> ```
->
-> Then retry `docker compose up`. This is a one-time fix per reboot on some Linux setups.
+Visit the app at `http://localhost:4000`.
 
 ---
 
-## Common Commands
+## 🤖 AI Usage Disclosure
 
-```bash
-# Run a single service
-pnpm turbo dev --filter=@ribatx/identity
+This project was developed with the assistance of:
 
-# Run only the web app
-pnpm turbo dev --filter=@ribatx/web
-
-# Type-check everything
-pnpm turbo build
-
-# Run all tests
-pnpm turbo test
-
-# Start full stack with Docker
-docker compose up --build
-```
+- **GitHub Copilot**: For rapid boilerplate generation and test suite expansion.
+- **Google Gemini**: For architectural design collaboration, resilience strategy refinement, and technical documentation.
 
 ---
 
-## User Accounts
+## 👥 The Team
 
-There is no self-registration UI. Accounts are created via the Identity API directly.
+Developed by **RibatX** for the **IUT DevSprint 2026 Hackathon**.
 
-### Default demo accounts (seeded automatically)
-
-| Role    | Student ID   | Password    | Notes                        |
-| ------- | ------------ | ----------- | ---------------------------- |
-| Student | `2021331042` | `pass1234`  | Regular student account      |
-| Admin   | `admin001`   | `admin1234` | Access to `/admin` dashboard |
-
-> Admin accounts are controlled by the `ADMIN_STUDENT_IDS` env var (comma-separated). Any student ID listed there receives `role=admin` in their JWT.
-
-### Creating a new student account
-
-```bash
-curl -X POST https://identity-production-08d3.up.railway.app/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"studentId":"2021331099","name":"New Student","password":"pass1234"}'
-```
-
-The account is immediately usable — log in at `http://localhost:4000`.
-
-### Promoting a user to admin
-
-Add their student ID to `ADMIN_STUDENT_IDS` in your `.env` file and restart the identity service:
-
-```env
-ADMIN_STUDENT_IDS=admin001,2021331099
-```
-
-```bash
-docker compose restart identity
-```
-
-They must log out and log back in to get a fresh JWT with the `role=admin` claim.
-
----
-
-## Contributing
-
-We use a `main → dev → feat/<name>/<feature>` branch strategy.
-
-```bash
-# Set your git identity (first time only)
-git config --global user.name "Your Name"
-git config --global user.email "your@email.com"
-
-# Husky git hooks are installed automatically when you run pnpm install.
-# pre-commit: auto-formats staged files with Prettier
-# pre-push:   runs the full test suite — push is blocked if any test fails
-
-# Start a new feature
-git checkout dev
-git pull origin dev
-git checkout -b feat/<your-name>/<short-description>
-
-# After finishing — merge back to dev
-git checkout dev
-git pull origin dev
-git merge feat/<your-name>/<short-description>
-git push origin dev
-```
-
-Rules:
-
-- **Never commit directly to `main` or `dev`**
-- All work goes through feature branches
-- `main` is updated only at demo-ready milestones
-- See [docs/teamwork-guidelines.md](docs/teamwork-guidelines.md) for the full team split and checklist
+See [docs/teamwork-guidelines.md](docs/teamwork-guidelines.md) for team members, detailed team contributions and split.

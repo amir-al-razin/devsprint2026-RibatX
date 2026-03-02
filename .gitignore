@@ -40,3 +40,7 @@ package-lock.json
 apps/*/src/generated
 nohup.out
 e2e-screenshots
+
+
+# personal docs
+problems.md
