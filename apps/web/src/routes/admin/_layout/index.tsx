@@ -1,6 +1,19 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
+import { motion, AnimatePresence } from 'framer-motion'
+import {
+  Activity,
+  Server,
+  Zap,
+  Clock,
+  HardDrive,
+  Cpu,
+  ShieldAlert,
+  Package,
+  AlertCircle,
+} from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import {
   Legend,
   Line,
@@ -42,6 +55,13 @@ const HEALTH_URLS: Record<string, string> = {
 
 const GATEWAY_METRICS_URL = `${env.VITE_GATEWAY_URL ?? 'http://localhost:3000'}/metrics`
 
+const CHAOS_SERVICES = [
+  ServiceName.GATEWAY,
+  ServiceName.STOCK,
+  ServiceName.KITCHEN,
+  ServiceName.NOTIFICATION,
+] as const
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 interface CachePoint {
@@ -74,49 +94,102 @@ function HealthDot({ url, service }: { url: string; service: string }) {
   const ok = data?.status === 'ok'
   const isChaos = chaosMode === 'ON'
   return (
-    <div className="flex items-center gap-2">
-      <Badge
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="group flex items-center gap-2.5 bg-secondary/55 hover:bg-secondary/72 px-3.5 py-3 rounded-lg transition-colors"
+    >
+      <div className="relative">
+        <div
+          className={cn(
+            'w-2.5 h-2.5 rounded-full absolute',
+            ok ? 'bg-green-500 animate-ping opacity-75' : 'hidden',
+          )}
+        />
+        <div
+          className={cn(
+            'w-2.5 h-2.5 rounded-full relative',
+            ok
+              ? 'bg-green-500'
+              : data === null
+                ? 'bg-muted-foreground'
+                : 'bg-destructive',
+          )}
+        />
+      </div>
+      <span className="font-medium text-sm capitalize tracking-[0.01em]">
+        {service}
+      </span>
+      <span
         className={cn(
-          'capitalize',
-          ok
-            ? 'bg-green-500 text-white hover:bg-green-500'
-            : data === null
-              ? 'bg-muted text-muted-foreground'
-              : 'bg-destructive text-destructive-foreground hover:bg-destructive',
+          'text-[11px] ml-auto pl-2 rounded-md px-2 py-1 leading-none transition-colors',
+          data === null
+            ? 'bg-muted text-muted-foreground'
+            : ok
+              ? 'bg-secondary text-muted-foreground'
+              : 'bg-destructive/12 text-destructive',
         )}
       >
-        {service}
-      </Badge>
-      <span className="text-xs text-muted-foreground">
-        {data === null ? '…' : ok ? 'ok' : 'down'}
+        {data === null ? 'connecting' : ok ? 'healthy' : 'down'}
       </span>
       {isChaos && (
-        <Badge className="bg-orange-500 text-white hover:bg-orange-500 text-xs animate-pulse">
-          CHAOS
+        <Badge className="bg-primary/14 text-primary hover:bg-primary/20 text-[10px] uppercase ml-1.5 rounded-md">
+          Chaos
         </Badge>
       )}
-    </div>
+    </motion.div>
   )
 }
 
 function MetricCard({
-  label,
+  title,
   value,
   unit = '',
+  icon: Icon,
+  delay = 0,
 }: {
-  label: string
+  title: string
   value: number | string | null
   unit?: string
+  icon?: LucideIcon
+  delay?: number
 }) {
   return (
-    <Card>
-      <CardContent className="pt-4 pb-3">
-        <p className="text-xs text-muted-foreground mb-1">{label}</p>
-        <p className="text-2xl font-bold tabular-nums">
-          {value === null ? '—' : `${value}${unit}`}
-        </p>
-      </CardContent>
-    </Card>
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ delay, duration: 0.3 }}
+    >
+      <Card className="bg-card transition-colors">
+        <CardContent className="p-5 flex items-center justify-between">
+          <div className="flex flex-col gap-1">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              {title}
+            </p>
+            <div className="flex items-baseline gap-1">
+              <motion.p
+                key={String(value)}
+                initial={{ opacity: 0, y: -5 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-3xl font-bold tracking-tight tabular-nums text-foreground"
+              >
+                {value === null ? '—' : value}
+              </motion.p>
+              {unit && (
+                <span className="text-sm font-medium text-muted-foreground mb-1">
+                  {unit}
+                </span>
+              )}
+            </div>
+          </div>
+          {Icon && (
+            <div className="h-10 w-10 rounded-full bg-primary/14 flex items-center justify-center text-primary">
+              <Icon size={20} />
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </motion.div>
   )
 }
 
@@ -166,14 +239,6 @@ function AdminDashboard() {
     setLatencyAlert(avg > 1000)
   }, [metrics])
 
-  // Chaos toggles — local state (optimistic)
-  const CHAOS_SERVICES = [
-    ServiceName.GATEWAY,
-    ServiceName.STOCK,
-    ServiceName.KITCHEN,
-    ServiceName.NOTIFICATION,
-  ] as const
-
   // Restock panel state
   const [currentQty, setCurrentQty] = useState<number | null>(null)
   const [restockQty, setRestockQty] = useState<string>('')
@@ -220,6 +285,36 @@ function AdminDashboard() {
     Object.fromEntries(CHAOS_SERVICES.map((s) => [s, false])),
   )
 
+  useEffect(() => {
+    let active = true
+
+    const syncChaosState = async () => {
+      try {
+        const results = await Promise.all(
+          CHAOS_SERVICES.map((service) => gatewayApi.getChaosStatus(service)),
+        )
+
+        if (!active) return
+
+        const nextState = Object.fromEntries(
+          results.map((result) => [result.service, result.chaosMode === 'ON']),
+        ) as Record<string, boolean>
+
+        setChaosState(nextState)
+      } catch {
+        // Ignore sync errors; existing UI state remains until next poll
+      }
+    }
+
+    syncChaosState()
+    const timer = setInterval(syncChaosState, 3000)
+
+    return () => {
+      active = false
+      clearInterval(timer)
+    }
+  }, [])
+
   async function handleChaosToggle(service: ServiceName, enabled: boolean) {
     setChaosState((prev) => ({ ...prev, [service]: enabled }))
     try {
@@ -237,198 +332,306 @@ function AdminDashboard() {
   }
 
   return (
-    <div className="flex flex-col gap-8">
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="flex flex-col gap-8 max-w-7xl mx-auto pb-12"
+    >
       {/* Latency overlay */}
-      {latencyAlert && (
-        <div className="fixed inset-0 bg-red-600/90 z-50 flex flex-col items-center justify-center pointer-events-none">
-          <p className="text-white text-4xl font-bold">⚠️ HIGH LATENCY</p>
-          <p className="text-white/80 text-lg mt-2">
-            Gateway avg latency &gt; 1000ms for the last 30s
+      <AnimatePresence>
+        {latencyAlert && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-primary/90 z-50 flex flex-col items-center justify-center pointer-events-none backdrop-blur-sm"
+          >
+            <AlertCircle className="w-24 h-24 text-white mb-6 animate-pulse" />
+            <p className="text-white text-4xl font-bold tracking-tight">
+              HIGH LATENCY
+            </p>
+            <p className="text-white/80 text-lg mt-2 font-medium">
+              Gateway avg latency &gt; 1000ms for the last 30s
+            </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">System Monitor</h1>
+          <p className="text-muted-foreground mt-1">
+            Real-time status of all microservices and metrics.
           </p>
         </div>
-      )}
+      </div>
 
-      <h1 className="text-2xl font-bold">System Monitor</h1>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Left Column: Health and Actions */}
+        <div className="flex flex-col gap-8 lg:col-span-1">
+          {/* Health Grid */}
+          <section>
+            <div className="flex items-center gap-2 mb-4">
+              <Server size={18} className="text-primary" />
+              <h2 className="font-semibold text-foreground tracking-wide">
+                Service Health
+              </h2>
+            </div>
+            <Card className="bg-card">
+              <CardContent className="p-5 flex flex-col gap-3">
+                {Object.entries(HEALTH_URLS).map(([service, url]) => (
+                  <HealthDot key={url} url={url} service={service} />
+                ))}
+              </CardContent>
+            </Card>
+          </section>
 
-      {/* Health Grid */}
-      <section>
-        <h2 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
-          Service Healthhhh
-        </h2>
-        <Card>
-          <CardContent className="pt-4 flex flex-wrap gap-4">
-            {Object.entries(HEALTH_URLS).map(([service, url]) => (
-              <HealthDot key={url} url={url} service={service} />
-            ))}
-          </CardContent>
-        </Card>
-      </section>
+          {/* Iftar Box Restock */}
+          <section>
+            <div className="flex items-center gap-2 mb-4">
+              <Package size={18} className="text-primary" />
+              <h2 className="font-semibold text-foreground tracking-wide">
+                Inventory Management
+              </h2>
+            </div>
+            <Card className="bg-card">
+              <CardContent className="p-5 flex flex-col gap-5">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-muted-foreground">
+                    Iftar Box Stock
+                  </span>
+                  <span className="text-2xl font-bold tabular-nums text-primary bg-primary/10 px-3 py-1 rounded-lg">
+                    {currentQty === null ? '—' : currentQty}
+                  </span>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min={0}
+                      placeholder="Amount"
+                      value={restockQty}
+                      onChange={(e) => setRestockQty(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleRestock()}
+                      className="bg-secondary/50 border-0 h-10 w-full"
+                    />
+                    <Button
+                      onClick={handleRestock}
+                      disabled={restocking || restockQty === ''}
+                      size="sm"
+                      className="h-10 px-6 font-semibold"
+                    >
+                      {restocking ? 'Wait…' : 'Update'}
+                    </Button>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    Sets absolute quantity of Iftar Boxes available.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </section>
 
-      {/* Metrics Panel */}
-      <section>
-        <h2 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
-          Gateway Metrics (live)
-        </h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <MetricCard
-            label="Uptime"
-            value={metrics ? Math.floor(metrics.uptime_seconds / 60) : null}
-            unit=" min"
-          />
-          <MetricCard
-            label="Orders Total"
-            value={metrics?.orders_total ?? null}
-          />
-          <MetricCard
-            label="Avg Latency"
-            value={metrics?.avg_latency_ms ?? null}
-            unit=" ms"
-          />
-          <MetricCard
-            label="P95 Latency"
-            value={metrics?.p95_latency_ms ?? null}
-            unit=" ms"
-          />
-          <MetricCard
-            label="Orders Failed"
-            value={metrics?.orders_failed ?? null}
-          />
-          <MetricCard label="Cache Hits" value={metrics?.cache_hits ?? null} />
-          <MetricCard
-            label="Cache Misses"
-            value={metrics?.cache_misses ?? null}
-          />
-          <MetricCard
-            label="Hit Ratio"
-            value={
-              metrics?.cache_hits != null && metrics?.cache_misses != null
-                ? (
-                    (metrics.cache_hits /
-                      Math.max(1, metrics.cache_hits + metrics.cache_misses)) *
-                    100
-                  ).toFixed(1)
-                : null
-            }
-            unit="%"
-          />
+          {/* Chaos Toggles */}
+          <section>
+            <div className="flex items-center gap-2 mb-4">
+              <ShieldAlert size={18} className="text-primary" />
+              <h2 className="font-semibold text-foreground tracking-wide">
+                Chaos Engineering
+              </h2>
+            </div>
+            <Card className="bg-card">
+              <CardContent className="p-5 flex flex-col gap-4">
+                {CHAOS_SERVICES.map((service) => (
+                  <motion.div
+                    key={service}
+                    whileHover={{ x: 2 }}
+                    className={cn(
+                      'flex items-center justify-between px-3.5 py-3 rounded-lg transition-colors',
+                      chaosState[service]
+                        ? 'bg-primary/10 hover:bg-primary/14'
+                        : 'hover:bg-secondary/65',
+                    )}
+                  >
+                    <Label
+                      htmlFor={`chaos-${service}`}
+                      className="capitalize font-medium cursor-pointer flex items-center gap-2 text-sm"
+                    >
+                      {service}
+                      {chaosState[service] && (
+                        <span className="flex h-2 w-2 rounded-full bg-primary animate-pulse" />
+                      )}
+                    </Label>
+                    <Switch
+                      id={`chaos-${service}`}
+                      checked={chaosState[service]}
+                      onCheckedChange={(val) => handleChaosToggle(service, val)}
+                      className={cn(
+                        'hover:data-[state=unchecked]:bg-muted',
+                        chaosState[service]
+                          ? 'data-[state=checked]:bg-primary'
+                          : '',
+                      )}
+                    />
+                  </motion.div>
+                ))}
+              </CardContent>
+            </Card>
+          </section>
         </div>
-      </section>
 
-      {/* Cache Hit Chart */}
-      <section>
-        <h2 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
-          Cache Hit / Miss (rolling 60 points)
-        </h2>
-        <Card>
-          <CardContent className="pt-4">
-            {chartData.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">
-                Waiting for data…
-              </p>
-            ) : (
-              <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={chartData}>
-                  <XAxis
-                    dataKey="t"
-                    tick={{ fontSize: 10 }}
-                    interval="preserveStartEnd"
-                  />
-                  <YAxis tick={{ fontSize: 10 }} />
-                  <Tooltip />
-                  <Legend />
-                  <Line
-                    type="monotone"
-                    dataKey="hits"
-                    stroke="#22c55e"
-                    dot={false}
-                    strokeWidth={2}
-                    name="Cache Hits"
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="misses"
-                    stroke="#ef4444"
-                    dot={false}
-                    strokeWidth={2}
-                    name="Cache Misses"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
-      </section>
-
-      {/* Chaos Toggles */}
-      <section>
-        <h2 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
-          Chaos Toggles
-        </h2>
-        <Card>
-          <CardContent className="pt-4 flex flex-wrap gap-6">
-            {CHAOS_SERVICES.map((service) => (
-              <div key={service} className="flex items-center gap-2">
-                <Switch
-                  id={`chaos-${service}`}
-                  checked={chaosState[service]}
-                  onCheckedChange={(val) => handleChaosToggle(service, val)}
-                />
-                <Label
-                  htmlFor={`chaos-${service}`}
-                  className="capitalize cursor-pointer"
-                >
-                  {service}
-                </Label>
-                {chaosState[service] && (
-                  <Badge className="bg-destructive text-destructive-foreground text-xs">
-                    FAILING
-                  </Badge>
-                )}
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      </section>
-
-      {/* Iftar Box Restock */}
-      <section>
-        <h2 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
-          Iftar Box Stock
-        </h2>
-        <Card>
-          <CardContent className="pt-4 flex flex-col gap-4">
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-muted-foreground">
-                Current quantity:
-              </span>
-              <span className="text-2xl font-bold tabular-nums">
-                {currentQty === null ? '—' : currentQty}
-              </span>
+        {/* Right Column: Metrics & Charts */}
+        <div className="flex flex-col gap-8 lg:col-span-2">
+          {/* Metrics Panel */}
+          <section>
+            <div className="flex items-center gap-2 mb-4">
+              <Activity size={18} className="text-primary" />
+              <h2 className="font-semibold text-foreground tracking-wide">
+                Gateway Telemetry
+              </h2>
             </div>
-            <div className="flex items-center gap-2 max-w-xs">
-              <Input
-                type="number"
-                min={0}
-                placeholder="New quantity"
-                value={restockQty}
-                onChange={(e) => setRestockQty(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleRestock()}
-                className="w-36"
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              <MetricCard
+                title="Total Orders"
+                value={metrics?.orders_total ?? null}
+                icon={Package}
+                delay={0.1}
               />
-              <Button
-                onClick={handleRestock}
-                disabled={restocking || restockQty === ''}
-                size="sm"
-              >
-                {restocking ? 'Updating…' : 'Set Quantity'}
-              </Button>
+              <MetricCard
+                title="Avg Latency"
+                value={metrics?.avg_latency_ms ?? null}
+                unit="ms"
+                icon={Clock}
+                delay={0.2}
+              />
+              <MetricCard
+                title="P95 Latency"
+                value={metrics?.p95_latency_ms ?? null}
+                unit="ms"
+                icon={Zap}
+                delay={0.3}
+              />
+              <MetricCard
+                title="Cache Hit Ratio"
+                value={
+                  metrics?.cache_hits != null && metrics?.cache_misses != null
+                    ? (
+                        (metrics.cache_hits /
+                          Math.max(
+                            1,
+                            metrics.cache_hits + metrics.cache_misses,
+                          )) *
+                        100
+                      ).toFixed(1)
+                    : null
+                }
+                unit="%"
+                icon={HardDrive}
+                delay={0.4}
+              />
+              <MetricCard
+                title="Cache Hits"
+                value={metrics?.cache_hits ?? null}
+                delay={0.5}
+              />
+              <MetricCard
+                title="Cache Misses"
+                value={metrics?.cache_misses ?? null}
+                delay={0.6}
+              />
             </div>
-            <p className="text-xs text-muted-foreground">
-              Sets the absolute quantity of Iftar Boxes available for ordering.
-            </p>
-          </CardContent>
-        </Card>
-      </section>
-    </div>
+          </section>
+
+          {/* Cache Hit Chart */}
+          <section>
+            <div className="flex items-center gap-2 mb-4">
+              <Cpu size={18} className="text-primary" />
+              <h2 className="font-semibold text-foreground tracking-wide">
+                Cache Performance
+              </h2>
+            </div>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+            >
+              <Card className="bg-card">
+                <CardContent className="p-6">
+                  {chartData.length === 0 ? (
+                    <div className="h-[250px] flex flex-col items-center justify-center text-muted-foreground gap-3">
+                      <Activity
+                        className="animate-pulse opacity-50"
+                        size={32}
+                      />
+                      <p className="text-sm font-medium">
+                        Collecting telemetry data…
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="h-[280px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart
+                          data={chartData}
+                          margin={{ top: 5, right: 10, left: -20, bottom: 0 }}
+                        >
+                          <XAxis
+                            dataKey="t"
+                            tick={{
+                              fill: 'var(--muted-foreground)',
+                              fontSize: 11,
+                            }}
+                            tickLine={false}
+                            axisLine={false}
+                            interval="preserveStartEnd"
+                            minTickGap={30}
+                          />
+                          <YAxis
+                            tick={{
+                              fill: 'var(--muted-foreground)',
+                              fontSize: 11,
+                            }}
+                            tickLine={false}
+                            axisLine={false}
+                          />
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: 'var(--card)',
+                              border: 'none',
+                              borderRadius: '8px',
+                            }}
+                          />
+                          <Legend
+                            iconType="circle"
+                            wrapperStyle={{ fontSize: 12, paddingTop: '10px' }}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="hits"
+                            stroke="var(--color-chart-3)"
+                            dot={false}
+                            strokeWidth={3}
+                            name="Cache Hits"
+                            isAnimationActive={false}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="misses"
+                            stroke="var(--color-primary)"
+                            dot={false}
+                            strokeWidth={3}
+                            name="Cache Misses"
+                            isAnimationActive={false}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
+          </section>
+        </div>
+      </div>
+    </motion.div>
   )
 }
