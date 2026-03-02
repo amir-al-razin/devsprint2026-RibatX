@@ -328,9 +328,6 @@ function AdminDashboard() {
   const [chaosState, setChaosState] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(CHAOS_SERVICES.map((s) => [s, false])),
   )
-  const [selectedTrace, setSelectedTrace] = useState<KitchenQueueItem | null>(
-    null,
-  )
   const [incidentTimeline, setIncidentTimeline] = useState<
     Array<IncidentEvent>
   >([])
@@ -757,20 +754,7 @@ function AdminDashboard() {
                       {kitchenRecent.items.map((item) => (
                         <div
                           key={`${item.orderId}-${item.createdAt}`}
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => setSelectedTrace(item)}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter' || event.key === ' ') {
-                              setSelectedTrace(item)
-                            }
-                          }}
-                          className={cn(
-                            'w-[220px] rounded-lg border bg-secondary/35 p-3.5 text-left transition-colors',
-                            selectedTrace?.orderId === item.orderId
-                              ? 'border-primary bg-primary/5'
-                              : 'border-border hover:bg-secondary/55',
-                          )}
+                          className="w-[220px] rounded-lg border border-border bg-secondary/35 p-3.5 text-left transition-colors hover:bg-secondary/55"
                         >
                           <div className="flex items-center justify-between gap-2 mb-2">
                             <Badge
@@ -817,69 +801,6 @@ function AdminDashboard() {
                 ) : (
                   <p className="text-sm text-muted-foreground">
                     No active queue items right now.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          </section>
-
-          {/* Distributed Trace Timeline */}
-          <section>
-            <div className="flex items-center gap-2 mb-4">
-              <Clock size={18} className="text-primary" />
-              <h2 className="font-semibold text-foreground tracking-wide">
-                Distributed Trace Timeline
-              </h2>
-            </div>
-            <Card className="bg-card">
-              <CardContent className="p-5">
-                {selectedTrace ? (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm font-medium break-all">
-                        {selectedTrace.traceId ?? selectedTrace.orderId}
-                      </p>
-                      <Badge className="bg-secondary text-muted-foreground hover:bg-secondary uppercase text-[10px]">
-                        {selectedTrace.state}
-                      </Badge>
-                    </div>
-
-                    <div className="space-y-2">
-                      {[
-                        { label: 'Gateway accepted order', offsetMs: 0 },
-                        { label: 'Gateway queued kitchen job', offsetMs: 5 },
-                        {
-                          label:
-                            selectedTrace.state === 'active'
-                              ? 'Kitchen started processing'
-                              : 'Kitchen waiting in queue',
-                          offsetMs: selectedTrace.state === 'active' ? 200 : 50,
-                        },
-                        {
-                          label:
-                            selectedTrace.state === 'active'
-                              ? 'Notification pending (cook in progress)'
-                              : 'Notification pending',
-                          offsetMs: selectedTrace.state === 'active' ? 4200 : 0,
-                        },
-                      ].map((step) => (
-                        <div
-                          key={step.label}
-                          className="flex items-center justify-between rounded-lg border border-border bg-secondary/30 px-3 py-2"
-                        >
-                          <span className="text-sm text-foreground">
-                            {step.label}
-                          </span>
-                          <span className="text-xs text-muted-foreground tabular-nums">
-                            +{step.offsetMs}ms
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Select a card from Live Kitchen Queue to inspect trace flow.
                   </p>
                 )}
               </CardContent>
