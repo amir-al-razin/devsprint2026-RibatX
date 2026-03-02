@@ -64,6 +64,8 @@ const CHAOS_SERVICES = [
   ServiceName.NOTIFICATION,
 ] as const
 
+const INCIDENT_TIMELINE_STORAGE_KEY = 'admin:incident-timeline:v1'
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 interface CachePoint {
@@ -329,6 +331,31 @@ function AdminDashboard() {
   const [incidentTimeline, setIncidentTimeline] = useState<
     Array<IncidentEvent>
   >([])
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(INCIDENT_TIMELINE_STORAGE_KEY)
+      if (!raw) return
+
+      const parsed = JSON.parse(raw) as Array<IncidentEvent>
+      if (Array.isArray(parsed)) {
+        setIncidentTimeline(parsed.slice(0, 30))
+      }
+    } catch {
+      // ignore corrupted localStorage data
+    }
+  }, [])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        INCIDENT_TIMELINE_STORAGE_KEY,
+        JSON.stringify(incidentTimeline.slice(0, 30)),
+      )
+    } catch {
+      // ignore storage quota / access issues
+    }
+  }, [incidentTimeline])
 
   const pushIncident = useCallback(
     (
