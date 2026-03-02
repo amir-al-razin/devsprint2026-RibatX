@@ -49,8 +49,10 @@ function StudentLayout() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b px-6 py-3 flex items-center justify-between">
-        <span className="font-semibold text-sm">🍽️ IUT Cafeteria</span>
+      <header className="px-6 py-4 flex items-center justify-between bg-secondary/40">
+        <span className="font-semibold text-sm tracking-wide">
+          🍽️ IUT Cafeteria
+        </span>
         <div className="flex items-center gap-3">
           {name && (
             <span className="text-sm text-muted-foreground">

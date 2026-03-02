@@ -1,6 +1,8 @@
 import { createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { useState, useEffect, useRef } from 'react'
 import { toast } from 'sonner'
+import { motion } from 'framer-motion'
+import { LogIn, User, Lock, CheckCircle2 } from 'lucide-react'
 import { identityApi, type ApiError } from '@/lib/api-client'
 import {
   storeToken,
@@ -98,90 +100,122 @@ function LoginPage() {
   if (existingToken) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-4">
-        <Card className="w-full max-w-sm">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl">🍽️ IUT Cafeteria</CardTitle>
-            <CardDescription>
-              You&apos;re already signed in
-              {existingName ? ` as ${existingName}` : ''}.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            <Button
-              className="w-full"
-              onClick={() => router.navigate({ to: '/' })}
-            >
-              Go to Dashboard
-            </Button>
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={handleSignOut}
-            >
-              Sign out
-            </Button>
-          </CardContent>
-        </Card>
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-full max-w-sm"
+        >
+          <Card className="w-full bg-card/96">
+            <CardHeader className="text-center">
+              <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-primary/14 text-primary">
+                <CheckCircle2 size={18} />
+              </div>
+              <CardTitle className="text-2xl">🍽️ IUT Cafeteria</CardTitle>
+              <CardDescription>
+                You&apos;re already signed in
+                {existingName ? ` as ${existingName}` : ''}.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              <Button
+                className="w-full"
+                onClick={() => router.navigate({ to: '/' })}
+              >
+                Go to Dashboard
+              </Button>
+              <Button
+                variant="secondary"
+                className="w-full"
+                onClick={handleSignOut}
+              >
+                Sign out
+              </Button>
+            </CardContent>
+          </Card>
+        </motion.div>
       </div>
     )
   }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl">🍽️ IUT Cafeteria</CardTitle>
-          <CardDescription>Sign in with your student ID</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="studentId">Student ID</Label>
-              <Input
-                id="studentId"
-                placeholder="e.g. 2021331042"
-                value={studentId}
-                onChange={(e) => setStudentId(e.target.value)}
-                required
-                disabled={loading || isRateLimited}
-              />
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="w-full max-w-sm"
+      >
+        <Card className="w-full bg-card/96">
+          <CardHeader className="text-center">
+            <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-primary/14 text-primary">
+              <LogIn size={18} />
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
+            <CardTitle className="text-2xl">🍽️ IUT Cafeteria</CardTitle>
+            <CardDescription>Sign in with your student ID</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="studentId">Student ID</Label>
+                <div className="relative">
+                  <User
+                    size={15}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                  />
+                  <Input
+                    id="studentId"
+                    placeholder="e.g. 2021331042"
+                    value={studentId}
+                    onChange={(e) => setStudentId(e.target.value)}
+                    required
+                    disabled={loading || isRateLimited}
+                    className="pl-9"
+                  />
+                </div>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="password">Password</Label>
+                <div className="relative">
+                  <Lock
+                    size={15}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                  />
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    disabled={loading || isRateLimited}
+                    className="pl-9"
+                  />
+                </div>
+              </div>
+
+              {isRateLimited && (
+                <p className="text-sm text-destructive text-center">
+                  Too many attempts — try again in{' '}
+                  <span className="font-semibold tabular-nums">
+                    {rateLimitCountdown}s
+                  </span>
+                </p>
+              )}
+
+              <Button
+                type="submit"
                 disabled={loading || isRateLimited}
-              />
-            </div>
-
-            {isRateLimited && (
-              <p className="text-sm text-destructive text-center">
-                Too many attempts — try again in{' '}
-                <span className="font-semibold tabular-nums">
-                  {rateLimitCountdown}s
-                </span>
-              </p>
-            )}
-
-            <Button
-              type="submit"
-              disabled={loading || isRateLimited}
-              className="w-full"
-            >
-              {loading
-                ? 'Signing in…'
-                : isRateLimited
-                  ? `Wait ${rateLimitCountdown}s`
-                  : 'Sign in'}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+                className="w-full"
+              >
+                {loading
+                  ? 'Signing in…'
+                  : isRateLimited
+                    ? `Wait ${rateLimitCountdown}s`
+                    : 'Sign in'}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </motion.div>
     </div>
   )
 }

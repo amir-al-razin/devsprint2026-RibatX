@@ -43,8 +43,10 @@ function AdminLayout() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b px-6 py-3 flex items-center justify-between">
-        <span className="font-semibold text-sm">RibatX — Admin Dashboard</span>
+      <header className="px-6 py-4 flex items-center justify-between bg-secondary/40">
+        <span className="font-semibold text-sm tracking-wide">
+          RibatX — Admin Dashboard
+        </span>
         <Button variant="ghost" size="sm" onClick={handleLogout}>
           Sign out
         </Button>

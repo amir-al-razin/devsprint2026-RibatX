@@ -35,6 +35,15 @@ const Toaster = ({ ...props }: ToasterProps) => {
       toastOptions={{
         classNames: {
           toast: 'cn-toast',
+          title: 'cn-toast-title',
+          description: 'cn-toast-description',
+          icon: 'cn-toast-icon',
+          closeButton: 'cn-toast-close',
+          success: 'cn-toast-success',
+          error: 'cn-toast-error',
+          warning: 'cn-toast-warning',
+          info: 'cn-toast-info',
+          loading: 'cn-toast-loading',
         },
       }}
       {...props}
