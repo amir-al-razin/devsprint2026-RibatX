@@ -58,6 +58,9 @@ export class OrdersService {
       );
 
       const orderId = `ORD-${Date.now()}`;
+      const traceId = `TRC-${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2, 8)}`;
 
       // 3. Chaos gate for kitchen before enqueue
       await this.assertNoChaos('kitchen');
@@ -65,6 +68,7 @@ export class OrdersService {
       // 4. HAND OFF TO KITCHEN QUEUE (Day 2/3 Feature)
       await this.kitchenQueue.add('cook-order', {
         orderId,
+        traceId,
         studentId,
         itemId,
       });
@@ -78,6 +82,7 @@ export class OrdersService {
       // 5. Persist order in Redis so GET /orders/:id can look it up
       const orderPayload = {
         orderId,
+        traceId,
         status: 'PENDING',
         studentId,
         itemId,

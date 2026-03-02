@@ -63,7 +63,11 @@ describe('OrdersService', () => {
       expect(result.orderId).toMatch(/^ORD-/);
       expect(kitchenQueue.add).toHaveBeenCalledWith(
         'cook-order',
-        expect.objectContaining({ studentId: 'student-1', itemId: 'item-1' }),
+        expect.objectContaining({
+          studentId: 'student-1',
+          itemId: 'item-1',
+          traceId: expect.stringMatching(/^TRC-/),
+        }),
       );
       expect(redis.incr).toHaveBeenCalledWith('metrics:cache:hits');
     });
