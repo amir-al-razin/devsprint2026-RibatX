@@ -69,14 +69,14 @@ async function request<T>(
 
 export const identityApi = {
   register: (body: { studentId: string; name: string; password: string }) =>
-    request<AuthResponse>(IDENTITY_BASE, '/auth/register', {
+    request<AuthResponse>(GATEWAY_BASE, '/auth/register', {
       method: 'POST',
       skipAuth: true,
       body: JSON.stringify(body),
     }),
 
   login: (body: LoginRequest) =>
-    request<AuthResponse>(IDENTITY_BASE, '/auth/login', {
+    request<AuthResponse>(GATEWAY_BASE, '/auth/login', {
       method: 'POST',
       skipAuth: true,
       body: JSON.stringify(body),

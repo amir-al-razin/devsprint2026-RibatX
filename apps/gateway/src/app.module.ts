@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { AuthProxyController } from './auth-proxy.controller';
 import { RedisModule } from '@nestjs-modules/ioredis';
 import { JwtModule } from '@nestjs/jwt';
 import { BullModule } from '@nestjs/bullmq';
@@ -43,6 +44,7 @@ import { RolesGuard } from './common/guards/roles.guard';
   ],
   controllers: [
     AppController,
+    AuthProxyController,
     ChaosController,
     AdminStockController,
     AdminObservabilityController,
