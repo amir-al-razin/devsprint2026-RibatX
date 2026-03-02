@@ -106,11 +106,24 @@ describe('OrdersService', () => {
       expect(redis.incr).toHaveBeenCalledWith('metrics:orders:failed');
     });
 
-    it('throws ServiceUnavailableException when chaos mode is active', async () => {
-      // Activate chaos on the stock service
+    it('throws ServiceUnavailableException when gateway chaos mode is active', async () => {
       redis.get.mockImplementation((key: string) =>
         Promise.resolve(key === 'chaos:gateway' ? '1' : null),
       );
+
+      await expect(service.createOrder('student-1', 'item-1')).rejects.toThrow(
+        ServiceUnavailableException,
+      );
+      expect(httpService.post).not.toHaveBeenCalled();
+      expect(kitchenQueue.add).not.toHaveBeenCalled();
+    });
+
+    it('throws ServiceUnavailableException when kitchen chaos mode is active before stock reservation', async () => {
+      redis.get.mockImplementation((key: string) => {
+        if (key === 'chaos:gateway') return Promise.resolve(null);
+        if (key === 'chaos:kitchen') return Promise.resolve('1');
+        return Promise.resolve(null);
+      });
 
       await expect(service.createOrder('student-1', 'item-1')).rejects.toThrow(
         ServiceUnavailableException,

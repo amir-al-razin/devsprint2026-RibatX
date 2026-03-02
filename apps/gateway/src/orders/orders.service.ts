@@ -51,6 +51,7 @@ export class OrdersService {
 
     // 0. Chaos-mode gates
     await this.assertNoChaos('gateway');
+    await this.assertNoChaos('kitchen');
     await this.assertNoChaos('stock');
 
     // 1. Check Redis cache first (resilience/speed)
@@ -75,9 +76,6 @@ export class OrdersService {
       const traceId = `TRC-${Date.now()}-${Math.random()
         .toString(36)
         .slice(2, 8)}`;
-
-      // 3. Chaos gate for kitchen before enqueue
-      await this.assertNoChaos('kitchen');
 
       // 4. HAND OFF TO KITCHEN QUEUE (Day 2/3 Feature)
       await this.kitchenQueue.add('cook-order', {
