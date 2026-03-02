@@ -475,10 +475,6 @@ function AdminDashboard() {
   )
   const queueState =
     queueTotal >= 8 ? 'critical' : queueTotal >= 4 ? 'busy' : 'healthy'
-  const stockOccupancyPercent = Math.max(
-    0,
-    Math.min(100, Number(currentQty ?? 0)),
-  )
 
   return (
     <motion.div
@@ -632,18 +628,16 @@ function AdminDashboard() {
               </h2>
             </div>
             <Card className="bg-card">
-              <CardContent className="p-5 flex flex-col ">
-                <div className="h-px bg-border/60" />
-                <div className="flex flex-col gap-3">
-                  <div className="flex flex-col gap-1.5 mb-4">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      Iftar Box Stock
-                    </p>
-                    <p className="text-3xl font-bold tabular-nums text-foreground">
-                      {currentQty === null ? '—' : currentQty}
-                    </p>
-                  </div>
+              <CardContent className="p-5 flex flex-col gap-5">
+                <div className="flex flex-col gap-1.5">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Iftar Box Stock
+                  </p>
+                  <p className="text-3xl font-bold tabular-nums text-foreground">
+                    {currentQty === null ? '—' : currentQty}
+                  </p>
                 </div>
+
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center gap-2">
                     <Input
@@ -682,11 +676,11 @@ function AdminDashboard() {
             </div>
             <Card className="bg-card">
               <CardContent className="p-5 flex flex-col gap-4">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Button
                     variant="secondary"
                     size="sm"
-                    className="justify-start"
+                    className="w-[116px] justify-center"
                     onClick={() => applyChaosPreset('gateway-fail')}
                   >
                     Gateway fail
@@ -694,7 +688,7 @@ function AdminDashboard() {
                   <Button
                     variant="secondary"
                     size="sm"
-                    className="justify-start"
+                    className="w-[116px] justify-center"
                     onClick={() => applyChaosPreset('kitchen-fail')}
                   >
                     Kitchen fail
@@ -702,7 +696,7 @@ function AdminDashboard() {
                   <Button
                     variant="secondary"
                     size="sm"
-                    className="justify-start"
+                    className="w-[116px] justify-center"
                     onClick={() => applyChaosPreset('full-stress')}
                   >
                     Full stress
