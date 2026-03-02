@@ -19,7 +19,10 @@ export function useSocket(studentId: string | null) {
   useEffect(() => {
     if (!studentId) return
 
-    const socket = io(NOTIFICATION_HUB_URL, { transports: ['websocket'] })
+    const socket = io(NOTIFICATION_HUB_URL, {
+      transports: ['websocket'],
+      path: '/socket.io',
+    })
     socketRef.current = socket
 
     socket.on('connect', () => {

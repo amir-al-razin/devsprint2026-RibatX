@@ -43,11 +43,17 @@ export class NotificationGateway
     return { status: 'JOINED', room };
   }
 
-  sendUpdate(studentId: string, orderId: string, status: string) {
+  sendUpdate(
+    studentId: string,
+    orderId: string,
+    status: string,
+    traceId?: string,
+  ) {
     const room = `student:${studentId}`;
     this.server.to(room).emit('order:status', {
       orderId,
       status,
+      traceId,
       timestamp: new Date().toISOString(),
     });
     this.logger.log(

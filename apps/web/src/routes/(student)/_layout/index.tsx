@@ -5,7 +5,7 @@ import { motion } from 'framer-motion'
 import { Package, Utensils, CheckCircle2, Clock } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { OrderStatus } from '@ribatx/types'
-import { gatewayApi, kitchenApi, stockApi } from '@/lib/api-client'
+import { gatewayApi } from '@/lib/api-client'
 import { getValidToken, getStudentId } from '@/lib/auth'
 import { useOrderStatus } from '@/hooks/useOrderStatus'
 import { Badge } from '@/components/ui/badge'
@@ -60,8 +60,8 @@ function OrderDashboard() {
   // Fetch actual item ID from stock service on mount (avoids stale env var)
   const [iftarBoxId, setIftarBoxId] = useState<string | null>(null)
   useEffect(() => {
-    stockApi
-      .items()
+    gatewayApi
+      .stockItems()
       .then((items) => {
         if (items?.[0]?.id) setIftarBoxId(items[0].id)
       })
@@ -70,12 +70,12 @@ function OrderDashboard() {
       })
   }, [])
 
-  // Poll kitchen queue length directly via kitchenApi (correct URL baked in)
+  // Poll kitchen queue length via gateway observability proxy
   const [queueData, setQueueData] = useState<{ total: number } | null>(null)
   useEffect(() => {
     const fetchQueue = () =>
-      kitchenApi
-        .queueLength()
+      gatewayApi
+        .kitchenQueueLength()
         .then(setQueueData)
         .catch(() => {})
     fetchQueue()
@@ -84,13 +84,27 @@ function OrderDashboard() {
   }, [])
 
   const orderState = useOrderStatus(orderId, studentId)
+  const [timeline, setTimeline] = useState<
+    Array<{ status: string; at: string; source: string; traceId?: string }>
+  >([])
+
+  const timelineLatestStatus =
+    timeline.length > 0
+      ? (timeline[timeline.length - 1]?.status as OrderStatus)
+      : null
 
   const currentStatus =
-    orderState?.status ?? (placed ? OrderStatus.PENDING : null)
+    orderState?.status ??
+    timelineLatestStatus ??
+    (placed ? OrderStatus.PENDING : null)
   const currentIdx = currentStatus ? STATUS_INDEX[currentStatus] : -1
   const isFailed = currentStatus === OrderStatus.FAILED
   const progressPercent =
     currentIdx >= 0 ? Math.min(100, ((currentIdx + 1) / STEPS.length) * 100) : 0
+
+  const stepTimeline = new Map(
+    timeline.map((event) => [event.status, event.at] as const),
+  )
 
   const handleOrder = useCallback(async () => {
     if (placing || placed || !iftarBoxId) return
@@ -129,6 +143,36 @@ function OrderDashboard() {
       toast.success('🍽️ Your order is ready for pickup!')
     }
   }, [currentStatus])
+
+  useEffect(() => {
+    if (!orderId) {
+      setTimeline([])
+      return
+    }
+
+    let cancelled = false
+
+    const fetchTimeline = async () => {
+      try {
+        const res = await gatewayApi.getOrderTimeline(orderId)
+        if (!cancelled) {
+          setTimeline(res.timeline)
+        }
+      } catch {
+        if (!cancelled) {
+          setTimeline([])
+        }
+      }
+    }
+
+    fetchTimeline()
+    const id = setInterval(fetchTimeline, 2000)
+
+    return () => {
+      cancelled = true
+      clearInterval(id)
+    }
+  }, [orderId])
 
   return (
     <motion.div
@@ -263,11 +307,22 @@ function OrderDashboard() {
                             </div>
 
                             <span className="ml-auto text-[11px] text-muted-foreground">
-                              {isCurrent
-                                ? 'Now'
-                                : isCompleted
-                                  ? 'Done'
-                                  : 'Next'}
+                              {(() => {
+                                const timestamp = stepTimeline.get(step.status)
+                                if (timestamp) {
+                                  return new Date(timestamp).toLocaleTimeString(
+                                    [],
+                                    {
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                      second: '2-digit',
+                                    },
+                                  )
+                                }
+                                if (isCurrent) return 'Now'
+                                if (isCompleted) return 'Done'
+                                return 'Next'
+                              })()}
                             </span>
                           </motion.div>
                         )
