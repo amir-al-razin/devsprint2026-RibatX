@@ -208,39 +208,71 @@ function OrderDashboard() {
                       }}
                     />
                   </div>
-                  <div className="flex items-center gap-2">
-                    {STEPS.map((step, idx) => (
-                      <motion.div
-                        key={step.status}
-                        className="flex items-center gap-2 flex-1 last:flex-none"
-                        initial={{ opacity: 0.55 }}
-                        animate={{ opacity: idx <= currentIdx ? 1 : 0.55 }}
-                      >
-                        <motion.div
-                          className={cn(
-                            'flex items-center justify-center gap-1.5 flex-1 text-center rounded-lg px-2.5 py-2 text-xs font-medium transition-colors',
-                            stepColor(idx, currentIdx, isFailed),
-                          )}
-                          animate={
-                            idx === currentIdx
-                              ? { scale: [1, 1.04, 1] }
-                              : { scale: 1 }
-                          }
-                          transition={{ duration: 0.35 }}
-                        >
-                          <step.icon size={13} />
-                          {step.label}
-                        </motion.div>
-                        {idx < STEPS.length - 1 && (
-                          <div
+                  <div className="relative">
+                    <div className="absolute left-[13px] top-3 bottom-3 w-px bg-muted" />
+                    <div className="space-y-2.5">
+                      {STEPS.map((step, idx) => {
+                        const isCompleted = idx < currentIdx
+                        const isCurrent = idx === currentIdx
+                        return (
+                          <motion.div
+                            key={step.status}
                             className={cn(
-                              'h-px flex-shrink-0 w-3',
-                              idx < currentIdx ? 'bg-primary/55' : 'bg-muted',
+                              'relative flex items-center gap-3 rounded-lg px-2.5 py-2.5 transition-colors',
+                              isCurrent
+                                ? 'bg-primary/12'
+                                : isCompleted
+                                  ? 'bg-secondary/75'
+                                  : 'bg-secondary/45',
                             )}
-                          />
-                        )}
-                      </motion.div>
-                    ))}
+                            initial={{ opacity: 0.55 }}
+                            animate={{ opacity: idx <= currentIdx ? 1 : 0.7 }}
+                          >
+                            <div className="relative z-10">
+                              <div
+                                className={cn(
+                                  'size-3 rounded-full',
+                                  idx <= currentIdx ? 'bg-primary' : 'bg-muted',
+                                )}
+                              />
+                              {isCurrent && (
+                                <motion.div
+                                  className="absolute inset-0 rounded-full bg-primary/35"
+                                  animate={{
+                                    scale: [1, 1.7, 1],
+                                    opacity: [0.55, 0, 0.55],
+                                  }}
+                                  transition={{
+                                    duration: 1.2,
+                                    repeat: Infinity,
+                                  }}
+                                />
+                              )}
+                            </div>
+
+                            <div
+                              className={cn(
+                                'flex items-center gap-2 text-sm',
+                                idx <= currentIdx
+                                  ? 'text-foreground'
+                                  : 'text-muted-foreground',
+                              )}
+                            >
+                              <step.icon size={14} />
+                              <span className="font-medium">{step.label}</span>
+                            </div>
+
+                            <span className="ml-auto text-[11px] text-muted-foreground">
+                              {isCurrent
+                                ? 'Now'
+                                : isCompleted
+                                  ? 'Done'
+                                  : 'Next'}
+                            </span>
+                          </motion.div>
+                        )
+                      })}
+                    </div>
                   </div>
                 </>
               )}
