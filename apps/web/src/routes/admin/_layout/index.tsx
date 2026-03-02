@@ -27,7 +27,7 @@ import {
 } from 'recharts'
 import { ServiceName } from '@ribatx/types'
 import type { HealthResponse, MetricsResponse } from '@ribatx/types'
-import { gatewayApi, stockApi } from '@/lib/api-client'
+import { gatewayApi } from '@/lib/api-client'
 import { getValidToken } from '@/lib/auth'
 import { useMetricsPoller } from '@/hooks/useMetricsPoller'
 import { Badge } from '@/components/ui/badge'
@@ -42,20 +42,21 @@ import { cn } from '@/lib/utils'
 
 const env = (import.meta as ImportMeta & { env: Record<string, string> }).env
 
-function svcUrl(envKey: string, fallbackPort: number, path: string): string {
-  const base = env[envKey] ?? `http://localhost:${fallbackPort}`
-  return `${base}${path}`
+const GATEWAY_BASE = env.VITE_GATEWAY_URL ?? '/api'
+
+function gatewayUrl(path: string): string {
+  return `${GATEWAY_BASE}${path}`
 }
 
 const HEALTH_URLS: Record<string, string> = {
-  gateway: svcUrl('VITE_GATEWAY_URL', 3000, '/health'),
-  identity: svcUrl('VITE_IDENTITY_URL', 3001, '/health'),
-  stock: svcUrl('VITE_STOCK_URL', 3002, '/health'),
-  kitchen: svcUrl('VITE_KITCHEN_URL', 3003, '/health'),
-  notification: svcUrl('VITE_NOTIFICATION_URL', 3004, '/health'),
+  gateway: gatewayUrl('/admin/observability/health/gateway'),
+  identity: gatewayUrl('/admin/observability/health/identity'),
+  stock: gatewayUrl('/admin/observability/health/stock'),
+  kitchen: gatewayUrl('/admin/observability/health/kitchen'),
+  notification: gatewayUrl('/admin/observability/health/notification'),
 }
 
-const GATEWAY_METRICS_URL = `${env.VITE_GATEWAY_URL ?? 'http://localhost:3000'}/metrics`
+const GATEWAY_METRICS_URL = gatewayUrl('/metrics')
 
 const CHAOS_SERVICES = [
   ServiceName.GATEWAY,
@@ -106,7 +107,18 @@ function HealthDot({
     status: 'healthy' | 'down'
   }) => void
 }) {
-  const data = useMetricsPoller<HealthResponse>(url, 5000)
+  const token = getValidToken()
+  const data = useMetricsPoller<HealthResponse>(
+    url,
+    5000,
+    token
+      ? {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      : undefined,
+  )
 
   // Use the typed api-client so the Authorization header is sent when present
   const [chaosMode, setChaosMode] = useState<'ON' | 'OFF' | null>(null)
@@ -249,6 +261,15 @@ export const Route = createFileRoute('/admin/_layout/')({
 })
 
 function AdminDashboard() {
+  const adminToken = getValidToken()
+  const authFetchOptions = adminToken
+    ? ({
+        headers: {
+          Authorization: `Bearer ${adminToken}`,
+        },
+      } as RequestInit)
+    : undefined
+
   // Gateway metrics polled every 3s
   const metrics = useMetricsPoller<MetricsResponse>(GATEWAY_METRICS_URL, 3000)
 
@@ -290,8 +311,8 @@ function AdminDashboard() {
 
   // Load current stock quantity on mount and after a successful restock
   const refreshStock = useCallback(() => {
-    stockApi
-      .items()
+    gatewayApi
+      .stockItems()
       .then((items) => {
         const iftarBox =
           items?.find((i) => i.name === 'Iftar Box') ?? items?.[0]
@@ -413,12 +434,20 @@ function AdminDashboard() {
     waiting: number
     active: number
     total: number
-  }>(svcUrl('VITE_KITCHEN_URL', 3003, '/queue/length'), 3000)
+  }>(
+    gatewayUrl('/admin/observability/kitchen/queue/length'),
+    3000,
+    authFetchOptions,
+  )
 
   const kitchenRecent = useMetricsPoller<{
     total: number
     items: Array<KitchenQueueItem>
-  }>(svcUrl('VITE_KITCHEN_URL', 3003, '/queue/recent?limit=10'), 3000)
+  }>(
+    gatewayUrl('/admin/observability/kitchen/queue/recent?limit=10'),
+    3000,
+    authFetchOptions,
+  )
 
   const [healthSnapshot, setHealthSnapshot] = useState<Record<string, boolean>>(
     () =>
@@ -434,7 +463,7 @@ function AdminDashboard() {
       const entries = await Promise.all(
         Object.entries(HEALTH_URLS).map(async ([service, url]) => {
           try {
-            const res = await fetch(url)
+            const res = await fetch(url, authFetchOptions)
             const data = (await res.json()) as HealthResponse
             return [service, data.status === 'ok'] as const
           } catch {
@@ -453,7 +482,7 @@ function AdminDashboard() {
       active = false
       clearInterval(timer)
     }
-  }, [])
+  }, [authFetchOptions])
 
   useEffect(() => {
     let active = true

@@ -126,6 +126,29 @@ export const gatewayApi = {
       '/admin/stock/restock',
       { method: 'PATCH', body: JSON.stringify({ quantity }) },
     ),
+
+  stockItems: () =>
+    request<StockItem[]>(GATEWAY_BASE, '/admin/observability/stock/items'),
+
+  serviceHealth: (
+    service: 'gateway' | 'identity' | 'stock' | 'kitchen' | 'notification',
+  ) =>
+    request<HealthResponse>(
+      GATEWAY_BASE,
+      `/admin/observability/health/${service}`,
+    ),
+
+  kitchenQueueLength: () =>
+    request<{ waiting: number; active: number; total: number }>(
+      GATEWAY_BASE,
+      '/admin/observability/kitchen/queue/length',
+    ),
+
+  kitchenQueueRecent: (limit = 10) =>
+    request<{ total: number; items: Array<unknown> }>(
+      GATEWAY_BASE,
+      `/admin/observability/kitchen/queue/recent?limit=${limit}`,
+    ),
 }
 
 // ─────────────────────────────────────────────

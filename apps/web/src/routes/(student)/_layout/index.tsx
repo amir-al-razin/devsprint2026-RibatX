@@ -5,7 +5,7 @@ import { motion } from 'framer-motion'
 import { Package, Utensils, CheckCircle2, Clock } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { OrderStatus } from '@ribatx/types'
-import { gatewayApi, kitchenApi, stockApi } from '@/lib/api-client'
+import { gatewayApi } from '@/lib/api-client'
 import { getValidToken, getStudentId } from '@/lib/auth'
 import { useOrderStatus } from '@/hooks/useOrderStatus'
 import { Badge } from '@/components/ui/badge'
@@ -60,8 +60,8 @@ function OrderDashboard() {
   // Fetch actual item ID from stock service on mount (avoids stale env var)
   const [iftarBoxId, setIftarBoxId] = useState<string | null>(null)
   useEffect(() => {
-    stockApi
-      .items()
+    gatewayApi
+      .stockItems()
       .then((items) => {
         if (items?.[0]?.id) setIftarBoxId(items[0].id)
       })
@@ -70,12 +70,12 @@ function OrderDashboard() {
       })
   }, [])
 
-  // Poll kitchen queue length directly via kitchenApi (correct URL baked in)
+  // Poll kitchen queue length via gateway observability proxy
   const [queueData, setQueueData] = useState<{ total: number } | null>(null)
   useEffect(() => {
     const fetchQueue = () =>
-      kitchenApi
-        .queueLength()
+      gatewayApi
+        .kitchenQueueLength()
         .then(setQueueData)
         .catch(() => {})
     fetchQueue()
