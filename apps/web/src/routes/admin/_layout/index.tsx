@@ -58,6 +58,13 @@ const HEALTH_URLS: Record<string, string> = {
 
 const GATEWAY_METRICS_URL = gatewayUrl('/metrics')
 
+const SERVICE_METRICS_URLS = {
+  identity: `${env.VITE_IDENTITY_URL ?? 'http://localhost:3001'}/metrics`,
+  stock: `${env.VITE_STOCK_URL ?? 'http://localhost:3002'}/metrics`,
+  kitchen: `${env.VITE_KITCHEN_URL ?? 'http://localhost:3003'}/metrics`,
+  notification: `${env.VITE_NOTIFICATION_URL ?? 'http://localhost:3004'}/metrics`,
+} as const
+
 const CHAOS_SERVICES = [
   ServiceName.GATEWAY,
   ServiceName.IDENTITY,
@@ -92,6 +99,21 @@ interface KitchenQueueItem {
   traceId?: string
   state: 'waiting' | 'active'
   createdAt: string
+}
+
+interface ServiceTelemetryMetrics {
+  uptime_seconds: number
+  orders_total: number
+  orders_failed: number
+  avg_latency_ms: number
+  p95_latency_ms: number
+}
+
+function formatUptimeCompact(seconds: number | null): string {
+  if (seconds == null) return '—'
+  if (seconds < 60) return `${seconds}s`
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`
+  return `${Math.floor(seconds / 3600)}h`
 }
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
@@ -274,6 +296,23 @@ function AdminDashboard() {
 
   // Gateway metrics polled every 3s
   const metrics = useMetricsPoller<MetricsResponse>(GATEWAY_METRICS_URL, 3000)
+
+  const identityMetrics = useMetricsPoller<ServiceTelemetryMetrics>(
+    SERVICE_METRICS_URLS.identity,
+    3000,
+  )
+  const stockMetrics = useMetricsPoller<ServiceTelemetryMetrics>(
+    SERVICE_METRICS_URLS.stock,
+    3000,
+  )
+  const kitchenMetrics = useMetricsPoller<ServiceTelemetryMetrics>(
+    SERVICE_METRICS_URLS.kitchen,
+    3000,
+  )
+  const notificationMetrics = useMetricsPoller<ServiceTelemetryMetrics>(
+    SERVICE_METRICS_URLS.notification,
+    3000,
+  )
 
   // Rolling 60-point cache hit/miss chart buffer
   const [chartData, setChartData] = useState<Array<CachePoint>>([])
@@ -1100,6 +1139,49 @@ function AdminDashboard() {
                 title="Cache Misses"
                 value={metrics?.cache_misses ?? null}
                 delay={0.6}
+              />
+            </div>
+          </section>
+
+          <section>
+            <div className="flex items-center gap-2 mb-4">
+              <Activity size={18} className="text-primary" />
+              <h2 className="font-semibold text-foreground tracking-wide">
+                Service Telemetry
+              </h2>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <MetricCard
+                title="Identity Uptime"
+                value={formatUptimeCompact(
+                  identityMetrics?.uptime_seconds ?? null,
+                )}
+                icon={Clock}
+                delay={0.1}
+              />
+              <MetricCard
+                title="Stock Uptime"
+                value={formatUptimeCompact(
+                  stockMetrics?.uptime_seconds ?? null,
+                )}
+                icon={Clock}
+                delay={0.15}
+              />
+              <MetricCard
+                title="Kitchen Uptime"
+                value={formatUptimeCompact(
+                  kitchenMetrics?.uptime_seconds ?? null,
+                )}
+                icon={Clock}
+                delay={0.2}
+              />
+              <MetricCard
+                title="Notification Uptime"
+                value={formatUptimeCompact(
+                  notificationMetrics?.uptime_seconds ?? null,
+                )}
+                icon={Clock}
+                delay={0.25}
               />
             </div>
           </section>
