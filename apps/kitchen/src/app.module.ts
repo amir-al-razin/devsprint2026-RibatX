@@ -9,6 +9,7 @@ import { RedisModule } from '@nestjs-modules/ioredis';
 import { APP_GUARD } from '@nestjs/core';
 import { OrdersProcessor } from './orders.processor';
 import { HealthModule } from './health/health.module';
+import { MetricsModule } from './metrics/metrics.module';
 import { ChaosGuard } from './common/guards/chaos.guard';
 
 @Module({
@@ -34,6 +35,7 @@ import { ChaosGuard } from './common/guards/chaos.guard';
     }),
     TerminusModule,
     HealthModule,
+    MetricsModule,
   ],
   controllers: [AppController, QueueController],
   providers: [

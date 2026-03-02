@@ -7,6 +7,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { NotificationGateway } from './notification.gateway';
 import { NotificationController } from './notification.controller';
 import { HealthModule } from './health/health.module';
+import { MetricsModule } from './metrics/metrics.module';
 import { ChaosGuard } from './common/guards/chaos.guard';
 
 @Module({
@@ -16,6 +17,7 @@ import { ChaosGuard } from './common/guards/chaos.guard';
       url: process.env.REDIS_URL || 'redis://localhost:6379',
     }),
     HealthModule,
+    MetricsModule,
   ],
   controllers: [NotificationController],
   providers: [

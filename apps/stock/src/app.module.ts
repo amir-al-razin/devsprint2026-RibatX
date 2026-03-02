@@ -6,6 +6,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { PrismaModule } from './prisma/prisma.module';
 import { StockModule } from './stock/stock.module';
 import { HealthModule } from './health/health.module';
+import { MetricsModule } from './metrics/metrics.module';
 import { ChaosGuard } from './common/guards/chaos.guard';
 
 @Module({
@@ -17,6 +18,7 @@ import { ChaosGuard } from './common/guards/chaos.guard';
     PrismaModule,
     StockModule,
     HealthModule,
+    MetricsModule,
   ],
   controllers: [AppController],
   providers: [
