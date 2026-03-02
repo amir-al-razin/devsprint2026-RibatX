@@ -153,3 +153,14 @@ Rules:
 - All work goes through feature branches
 - `main` is updated only at demo-ready milestones
 - See [docs/teamwork-guidelines.md](docs/teamwork-guidelines.md) for the full team split and checklist
+
+---
+
+## AI Policy & Disclosure
+
+This project was built with the assistance of AI tools to accelerate development and ensure architectural robustness.
+
+- **GitHub Copilot:** Used as a pair for logic scaffolding in microservices (NestJS), writing complex React hooks for the dashboard, and optimizing Prisma schemas.
+- **Google Gemini:** Assisted in requirement analysis, architectural documentation refinement, and system resilience planning.
+
+---
