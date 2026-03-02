@@ -8,7 +8,7 @@ import type {
   MetricsResponse,
   StockItem,
 } from '@ribatx/types'
-import { getToken } from './auth'
+import { getValidToken } from './auth'
 
 // In dev these resolve through the Vite proxy.
 // In Docker / Railway use the injected env vars that point to real services.
@@ -38,7 +38,11 @@ async function request<T>(
   } = {},
 ): Promise<T> {
   const { skipAuth = false, extraHeaders = {}, ...fetchOpts } = options
-  const token = getToken()
+  const token = getValidToken()
+
+  if (!skipAuth && !token) {
+    throw { status: 401, message: 'Missing authentication token' } as ApiError
+  }
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',

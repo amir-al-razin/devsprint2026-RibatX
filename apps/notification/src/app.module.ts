@@ -1,14 +1,30 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { RedisModule } from '@nestjs-modules/ioredis';
+import { APP_GUARD } from '@nestjs/core';
 
 import { NotificationGateway } from './notification.gateway';
 import { NotificationController } from './notification.controller';
 import { HealthModule } from './health/health.module';
+import { ChaosGuard } from './common/guards/chaos.guard';
 
 @Module({
-  imports: [HealthModule],
+  imports: [
+    RedisModule.forRoot({
+      type: 'single',
+      url: process.env.REDIS_URL || 'redis://localhost:6379',
+    }),
+    HealthModule,
+  ],
   controllers: [NotificationController],
-  providers: [AppService, NotificationGateway],
+  providers: [
+    AppService,
+    NotificationGateway,
+    {
+      provide: APP_GUARD,
+      useClass: ChaosGuard,
+    },
+  ],
 })
 export class AppModule {}

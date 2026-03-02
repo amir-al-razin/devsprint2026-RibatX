@@ -5,11 +5,18 @@ import { QueueController } from './queue/queue.controller';
 
 import { BullModule } from '@nestjs/bullmq';
 import { TerminusModule } from '@nestjs/terminus';
+import { RedisModule } from '@nestjs-modules/ioredis';
+import { APP_GUARD } from '@nestjs/core';
 import { OrdersProcessor } from './orders.processor';
 import { HealthModule } from './health/health.module';
+import { ChaosGuard } from './common/guards/chaos.guard';
 
 @Module({
   imports: [
+    RedisModule.forRoot({
+      type: 'single',
+      url: process.env.REDIS_URL || 'redis://localhost:6379',
+    }),
     BullModule.forRoot({
       connection: (() => {
         const url = new URL(process.env.REDIS_URL || 'redis://localhost:6379');
@@ -29,6 +36,13 @@ import { HealthModule } from './health/health.module';
     HealthModule,
   ],
   controllers: [AppController, QueueController],
-  providers: [AppService, OrdersProcessor],
+  providers: [
+    AppService,
+    OrdersProcessor,
+    {
+      provide: APP_GUARD,
+      useClass: ChaosGuard,
+    },
+  ],
 })
 export class AppModule {}

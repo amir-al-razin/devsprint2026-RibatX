@@ -8,6 +8,8 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
+import { InjectRedis } from '@nestjs-modules/ioredis';
+import Redis from 'ioredis';
 import { firstValueFrom } from 'rxjs';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard, ROLES_KEY } from './common/guards/roles.guard';
@@ -18,7 +20,10 @@ const Roles = (...roles: string[]) => SetMetadata(ROLES_KEY, roles);
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('admin')
 export class AdminObservabilityController {
-  constructor(private readonly httpService: HttpService) {}
+  constructor(
+    private readonly httpService: HttpService,
+    @InjectRedis() private readonly redis: Redis,
+  ) {}
 
   private serviceUrls(
     service: 'identity' | 'stock' | 'kitchen' | 'notification',
@@ -80,6 +85,10 @@ export class AdminObservabilityController {
     service: 'gateway' | 'identity' | 'stock' | 'kitchen' | 'notification',
   ) {
     if (service === 'gateway') {
+      const chaos = await this.redis.get('chaos:gateway');
+      if (chaos === '1') {
+        return { status: 'error', service: 'gateway', chaosMode: 'ON' };
+      }
       return { status: 'ok', service: 'gateway' };
     }
 

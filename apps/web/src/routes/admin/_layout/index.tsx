@@ -28,7 +28,7 @@ import {
 import { ServiceName } from '@ribatx/types'
 import type { HealthResponse, MetricsResponse } from '@ribatx/types'
 import { gatewayApi } from '@/lib/api-client'
-import { getValidToken } from '@/lib/auth'
+import { getValidToken, isAdmin } from '@/lib/auth'
 import { useMetricsPoller } from '@/hooks/useMetricsPoller'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -60,6 +60,7 @@ const GATEWAY_METRICS_URL = gatewayUrl('/metrics')
 
 const CHAOS_SERVICES = [
   ServiceName.GATEWAY,
+  ServiceName.IDENTITY,
   ServiceName.STOCK,
   ServiceName.KITCHEN,
   ServiceName.NOTIFICATION,
@@ -118,18 +119,20 @@ function HealthDot({
           },
         }
       : undefined,
+    Boolean(token),
   )
 
   // Use the typed api-client so the Authorization header is sent when present
   const [chaosMode, setChaosMode] = useState<'ON' | 'OFF' | null>(null)
   const pollChaos = useCallback(async () => {
+    if (!token) return
     try {
       const result = await gatewayApi.getChaosStatus(service)
       setChaosMode(result.chaosMode)
     } catch {
       // silently ignore — endpoint may not be guarded yet
     }
-  }, [service])
+  }, [service, token])
   useEffect(() => {
     pollChaos()
     const timer = setInterval(pollChaos, 3000)
@@ -137,18 +140,21 @@ function HealthDot({
   }, [pollChaos])
 
   const lastHealthRef = useRef<'healthy' | 'down' | null>(null)
+  const isChaos = chaosMode === 'ON'
+  const ok = data?.status === 'ok' && !isChaos
+
   useEffect(() => {
-    const next =
-      data === null ? null : data.status === 'ok' ? 'healthy' : 'down'
+    const next = data === null ? null : ok ? 'healthy' : 'down'
     if (!next) return
     if (lastHealthRef.current !== next) {
       onHealthChange?.({ service, status: next })
       lastHealthRef.current = next
     }
-  }, [data, onHealthChange, service])
+  }, [data, ok, onHealthChange, service])
 
-  const ok = data?.status === 'ok'
-  const isChaos = chaosMode === 'ON'
+  const statusText =
+    data === null ? 'connecting' : isChaos ? 'chaos' : ok ? 'healthy' : 'down'
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -186,13 +192,8 @@ function HealthDot({
               : 'bg-destructive/12 text-destructive',
         )}
       >
-        {data === null ? 'connecting' : ok ? 'healthy' : 'down'}
+        {statusText}
       </span>
-      {isChaos && (
-        <Badge className="bg-primary/14 text-primary hover:bg-primary/20 text-[10px] uppercase ml-1.5 rounded-md">
-          Chaos
-        </Badge>
-      )}
     </motion.div>
   )
 }
@@ -256,6 +257,7 @@ export const Route = createFileRoute('/admin/_layout/')({
     if (typeof window === 'undefined') return // SSR: skip
     const token = getValidToken()
     if (!token) throw redirect({ to: '/login' })
+    if (!isAdmin(token)) throw redirect({ to: '/unauthorized' })
   },
   component: AdminDashboard,
 })
@@ -438,6 +440,7 @@ function AdminDashboard() {
     gatewayUrl('/admin/observability/kitchen/queue/length'),
     3000,
     authFetchOptions,
+    Boolean(adminToken),
   )
 
   const kitchenRecent = useMetricsPoller<{
@@ -447,6 +450,7 @@ function AdminDashboard() {
     gatewayUrl('/admin/observability/kitchen/queue/recent?limit=10'),
     3000,
     authFetchOptions,
+    Boolean(adminToken),
   )
 
   const [healthSnapshot, setHealthSnapshot] = useState<Record<string, boolean>>(
@@ -457,6 +461,8 @@ function AdminDashboard() {
   )
 
   useEffect(() => {
+    if (!adminToken) return
+
     let active = true
 
     const pollHealth = async () => {
@@ -482,9 +488,11 @@ function AdminDashboard() {
       active = false
       clearInterval(timer)
     }
-  }, [authFetchOptions])
+  }, [adminToken, authFetchOptions])
 
   useEffect(() => {
+    if (!adminToken) return
+
     let active = true
 
     const syncChaosState = async () => {
@@ -512,7 +520,7 @@ function AdminDashboard() {
       active = false
       clearInterval(timer)
     }
-  }, [])
+  }, [adminToken])
 
   async function handleChaosToggle(service: ServiceName, enabled: boolean) {
     setChaosState((prev) => ({ ...prev, [service]: enabled }))
@@ -548,6 +556,7 @@ function AdminDashboard() {
       targets[ServiceName.KITCHEN] = true
     } else {
       targets[ServiceName.GATEWAY] = true
+      targets[ServiceName.IDENTITY] = true
       targets[ServiceName.STOCK] = true
       targets[ServiceName.KITCHEN] = true
       targets[ServiceName.NOTIFICATION] = true

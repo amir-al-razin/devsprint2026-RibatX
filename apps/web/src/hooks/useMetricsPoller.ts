@@ -8,11 +8,16 @@ export function useMetricsPoller<T>(
   url: string,
   intervalMs: number = 3000,
   fetchOptions?: RequestInit,
+  enabled: boolean = true,
 ): T | null {
   const [data, setData] = useState<T | null>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
+    if (!enabled) {
+      return
+    }
+
     let cancelled = false
 
     const poll = async () => {
@@ -33,7 +38,7 @@ export function useMetricsPoller<T>(
       cancelled = true
       if (timerRef.current) clearInterval(timerRef.current)
     }
-  }, [fetchOptions, intervalMs, url])
+  }, [enabled, fetchOptions, intervalMs, url])
 
   return data
 }
