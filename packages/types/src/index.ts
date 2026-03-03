@@ -9,6 +9,7 @@ export enum OrderStatus {
   STOCK_VERIFIED = "STOCK_VERIFIED",
   IN_KITCHEN = "IN_KITCHEN",
   READY = "READY",
+  NOTIFIED = "NOTIFIED",
   FAILED = "FAILED",
 }
 

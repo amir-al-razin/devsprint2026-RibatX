@@ -59,10 +59,10 @@ const HEALTH_URLS: Record<string, string> = {
 const GATEWAY_METRICS_URL = gatewayUrl('/metrics')
 
 const SERVICE_METRICS_URLS = {
-  identity: `${env.VITE_IDENTITY_URL ?? 'http://localhost:3001'}/metrics`,
-  stock: `${env.VITE_STOCK_URL ?? 'http://localhost:3002'}/metrics`,
-  kitchen: `${env.VITE_KITCHEN_URL ?? 'http://localhost:3003'}/metrics`,
-  notification: `${env.VITE_NOTIFICATION_URL ?? 'http://localhost:3004'}/metrics`,
+  identity: gatewayUrl('/admin/observability/metrics/identity'),
+  stock: gatewayUrl('/admin/observability/metrics/stock'),
+  kitchen: gatewayUrl('/admin/observability/metrics/kitchen'),
+  notification: gatewayUrl('/admin/observability/metrics/notification'),
 } as const
 
 const CHAOS_SERVICES = [

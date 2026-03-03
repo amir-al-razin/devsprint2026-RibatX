@@ -5,7 +5,7 @@ import { NotificationGateway } from './notification.gateway';
 export class NotificationController {
   constructor(private readonly gateway: NotificationGateway) {}
 
-  // Called by Kitchen Queue: PATCH /notify/:orderId { status, studentId }
+  // Legacy HTTP fallback: PATCH /notify/:orderId { status, studentId }
   @Patch('notify/:orderId')
   notifyOrder(
     @Param('orderId') orderId: string,

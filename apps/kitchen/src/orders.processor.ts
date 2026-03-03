@@ -43,24 +43,24 @@ export class OrdersProcessor extends WorkerHost {
 
     this.logger.log(`Order ${orderId} is READY!`);
 
-    // Step 3: enqueue READY notification (durable + retryable)
+    // Step 3: enqueue NOTIFIED (ready-for-pickup) notification (durable + retryable)
     await this.notificationQueue.add(
       'notify-order',
       {
         orderId,
         studentId,
-        status: 'READY',
+        status: 'NOTIFIED',
         traceId,
       },
       {
-        jobId: `${orderId}:READY`,
+        jobId: `${orderId}:NOTIFIED`,
         attempts: 5,
         backoff: { type: 'exponential', delay: 500 },
         removeOnComplete: true,
         removeOnFail: false,
       },
     );
-    this.logger.log(`Enqueued READY notification for order ${orderId}`);
+    this.logger.log(`Enqueued NOTIFIED notification for order ${orderId}`);
 
     return { status: 'COMPLETED', orderId };
   }

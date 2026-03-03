@@ -99,6 +99,27 @@ export class AdminObservabilityController {
     }
   }
 
+  @Get('metrics/:service')
+  async getServiceMetrics(
+    @Param('service')
+    service: 'gateway' | 'identity' | 'stock' | 'kitchen' | 'notification',
+  ) {
+    if (service === 'gateway') {
+      // Gateway exposes its own metrics endpoint
+      try {
+        return await this.getFromService('gateway' as any, '/metrics');
+      } catch {
+        throw new BadGatewayException('Gateway metrics unavailable');
+      }
+    }
+
+    try {
+      return await this.getFromService(service, '/metrics');
+    } catch {
+      throw new BadGatewayException(`${service} metrics unavailable`);
+    }
+  }
+
   @Get('kitchen/queue/length')
   async getKitchenQueueLength() {
     try {

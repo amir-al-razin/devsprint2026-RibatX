@@ -21,10 +21,7 @@ export class NotificationProcessor extends WorkerHost {
   async process(job: Job<NotifyOrderJob, any, string>): Promise<any> {
     const { orderId, studentId, status, traceId } = job.data;
 
-    // 1) Real-time delivery (websocket)
-    this.gateway.sendUpdate(studentId, orderId, status, traceId);
-
-    // 2) Durable status update (only on successful job completion)
+    // 1) Durable status update (only on successful job completion)
     const gatewayUrl = process.env.GATEWAY_SERVICE_URL || 'http://gateway:3000';
     const internalApiKey = process.env.INTERNAL_API_KEY;
 
@@ -50,6 +47,9 @@ export class NotificationProcessor extends WorkerHost {
         `Gateway status update failed: ${res.status} ${res.statusText} ${body}`,
       );
     }
+
+    // 2) Real-time delivery (websocket) — only after durable update succeeds
+    this.gateway.sendUpdate(studentId, orderId, status, traceId);
 
     this.logger.log(`Notified ${status} for order ${orderId} (job ${job.id})`);
     return { delivered: true, orderId, status };

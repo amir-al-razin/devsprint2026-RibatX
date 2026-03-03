@@ -19,7 +19,7 @@ const STEPS: { status: OrderStatus; label: string; icon: LucideIcon }[] = [
   { status: OrderStatus.PENDING, label: 'Pending', icon: Clock },
   { status: OrderStatus.STOCK_VERIFIED, label: 'Verified', icon: Package },
   { status: OrderStatus.IN_KITCHEN, label: 'Cooking', icon: Utensils },
-  { status: OrderStatus.READY, label: 'Ready', icon: CheckCircle2 },
+  { status: OrderStatus.NOTIFIED, label: 'Notified', icon: CheckCircle2 },
 ]
 
 const STATUS_INDEX: Record<OrderStatus, number> = {
@@ -27,6 +27,7 @@ const STATUS_INDEX: Record<OrderStatus, number> = {
   [OrderStatus.STOCK_VERIFIED]: 1,
   [OrderStatus.IN_KITCHEN]: 2,
   [OrderStatus.READY]: 3,
+  [OrderStatus.NOTIFIED]: 3,
   [OrderStatus.FAILED]: -1,
 }
 
@@ -139,7 +140,10 @@ function OrderDashboard() {
 
   // Toast on READY
   useEffect(() => {
-    if (currentStatus === OrderStatus.READY) {
+    if (
+      currentStatus === OrderStatus.READY ||
+      currentStatus === OrderStatus.NOTIFIED
+    ) {
       toast.success('🍽️ Your order is ready for pickup!')
     }
   }, [currentStatus])

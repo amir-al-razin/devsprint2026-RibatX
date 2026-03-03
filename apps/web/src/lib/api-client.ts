@@ -12,12 +12,9 @@ import { getValidToken } from './auth'
 
 // In dev these resolve through the Vite proxy.
 // In Docker / Railway use the injected env vars that point to real services.
-const GATEWAY_BASE =
+const GATEWAY_URL =
   (import.meta as ImportMeta & { env: Record<string, string> }).env
     .VITE_GATEWAY_URL ?? '/api'
-const IDENTITY_BASE =
-  (import.meta as ImportMeta & { env: Record<string, string> }).env
-    .VITE_IDENTITY_URL ?? 'http://localhost:3001'
 
 // ─────────────────────────────────────────────
 // Core fetch wrapper
@@ -73,23 +70,18 @@ async function request<T>(
 
 export const identityApi = {
   register: (body: { studentId: string; name: string; password: string }) =>
-    request<AuthResponse>(GATEWAY_BASE, '/auth/register', {
+    request<AuthResponse>(GATEWAY_URL, '/auth/register', {
       method: 'POST',
       skipAuth: true,
       body: JSON.stringify(body),
     }),
 
   login: (body: LoginRequest) =>
-    request<AuthResponse>(GATEWAY_BASE, '/auth/login', {
+    request<AuthResponse>(GATEWAY_URL, '/auth/login', {
       method: 'POST',
       skipAuth: true,
       body: JSON.stringify(body),
     }),
-
-  health: () =>
-    request<HealthResponse>(IDENTITY_BASE, '/health', { skipAuth: true }),
-  metrics: () =>
-    request<MetricsResponse>(IDENTITY_BASE, '/metrics', { skipAuth: true }),
 }
 
 // ─────────────────────────────────────────────
@@ -98,14 +90,14 @@ export const identityApi = {
 
 export const gatewayApi = {
   placeOrder: (itemId: string, idempotencyKey: string) =>
-    request<OrderResponseDto>(GATEWAY_BASE, '/orders', {
+    request<OrderResponseDto>(GATEWAY_URL, '/orders', {
       method: 'POST',
       body: JSON.stringify({ itemId }),
       extraHeaders: { 'X-Idempotency-Key': idempotencyKey },
     }),
 
   getOrder: (orderId: string) =>
-    request<OrderResponseDto>(GATEWAY_BASE, `/orders/${orderId}`),
+    request<OrderResponseDto>(GATEWAY_URL, `/orders/${orderId}`),
 
   getOrderTimeline: (orderId: string) =>
     request<{
@@ -117,108 +109,60 @@ export const gatewayApi = {
         source: string
         traceId?: string
       }>
-    }>(GATEWAY_BASE, `/orders/${orderId}/timeline`),
+    }>(GATEWAY_URL, `/orders/${orderId}/timeline`),
 
   health: () =>
-    request<HealthResponse>(GATEWAY_BASE, '/health', { skipAuth: true }),
+    request<HealthResponse>(GATEWAY_URL, '/health', { skipAuth: true }),
   metrics: () =>
-    request<MetricsResponse>(GATEWAY_BASE, '/metrics', { skipAuth: true }),
+    request<MetricsResponse>(GATEWAY_URL, '/metrics', { skipAuth: true }),
 
   toggleChaos: (body: ChaosToggleRequest) =>
-    request<ChaosToggleResponse>(GATEWAY_BASE, '/admin/chaos', {
+    request<ChaosToggleResponse>(GATEWAY_URL, '/admin/chaos', {
       method: 'POST',
       body: JSON.stringify(body),
     }),
 
   getChaosStatus: (service: string) =>
     request<{ service: string; chaosMode: 'ON' | 'OFF' }>(
-      GATEWAY_BASE,
+      GATEWAY_URL,
       `/admin/chaos/status?service=${service}`,
     ),
 
   restock: (quantity: number) =>
     request<{ id: string; name: string; quantity: number }>(
-      GATEWAY_BASE,
+      GATEWAY_URL,
       '/admin/stock/restock',
       { method: 'PATCH', body: JSON.stringify({ quantity }) },
     ),
 
   stockItems: () =>
-    request<StockItem[]>(GATEWAY_BASE, '/admin/observability/stock/items'),
+    request<StockItem[]>(GATEWAY_URL, '/admin/observability/stock/items'),
 
   serviceHealth: (
     service: 'gateway' | 'identity' | 'stock' | 'kitchen' | 'notification',
   ) =>
     request<HealthResponse>(
-      GATEWAY_BASE,
+      GATEWAY_URL,
       `/admin/observability/health/${service}`,
+    ),
+
+  serviceMetrics: (
+    service: 'identity' | 'stock' | 'kitchen' | 'notification',
+  ) =>
+    request<MetricsResponse>(
+      GATEWAY_URL,
+      `/admin/observability/metrics/${service}`,
     ),
 
   kitchenQueueLength: () =>
     request<{ waiting: number; active: number; total: number }>(
-      GATEWAY_BASE,
+      GATEWAY_URL,
       '/admin/observability/kitchen/queue/length',
     ),
 
   kitchenQueueRecent: (limit = 10) =>
     request<{ total: number; items: Array<unknown> }>(
-      GATEWAY_BASE,
+      GATEWAY_URL,
       `/admin/observability/kitchen/queue/recent?limit=${limit}`,
-    ),
-}
-
-// ─────────────────────────────────────────────
-// Other services (direct in dev, internal in Docker)
-// ─────────────────────────────────────────────
-
-function svcBase(envKey: string, fallbackPort: number): string {
-  return (
-    (import.meta as ImportMeta & { env: Record<string, string> }).env[envKey] ??
-    `http://localhost:${fallbackPort}`
-  )
-}
-
-export const stockApi = {
-  items: () =>
-    request<StockItem[]>(svcBase('VITE_STOCK_URL', 3002), '/stock/items', {
-      skipAuth: true,
-    }),
-  health: () =>
-    request<HealthResponse>(svcBase('VITE_STOCK_URL', 3002), '/health', {
-      skipAuth: true,
-    }),
-  metrics: () =>
-    request<MetricsResponse>(svcBase('VITE_STOCK_URL', 3002), '/metrics', {
-      skipAuth: true,
-    }),
-}
-
-export const kitchenApi = {
-  queueLength: () =>
-    request<{ waiting: number; active: number; total: number }>(
-      svcBase('VITE_KITCHEN_URL', 3003),
-      '/queue/length',
-      { skipAuth: true },
-    ),
-  health: () =>
-    request<HealthResponse>(svcBase('VITE_KITCHEN_URL', 3003), '/health', {
-      skipAuth: true,
-    }),
-  metrics: () =>
-    request<MetricsResponse>(svcBase('VITE_KITCHEN_URL', 3003), '/metrics', {
-      skipAuth: true,
-    }),
-}
-
-export const notificationApi = {
-  health: () =>
-    request<HealthResponse>(svcBase('VITE_NOTIFICATION_URL', 3004), '/health', {
-      skipAuth: true,
-    }),
-  metrics: () =>
-    request<MetricsResponse>(
-      svcBase('VITE_NOTIFICATION_URL', 3004),
-      '/metrics',
-      { skipAuth: true },
     ),
 }

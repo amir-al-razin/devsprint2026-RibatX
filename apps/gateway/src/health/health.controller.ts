@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Injectable } from '@nestjs/common';
 import {
   HealthCheck,
   HealthCheckService,
@@ -6,9 +6,9 @@ import {
   HealthIndicatorResult,
   HealthCheckError,
 } from '@nestjs/terminus';
-import { Injectable } from '@nestjs/common';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class RedisHealthIndicator extends HealthIndicator {
@@ -31,11 +31,32 @@ export class RedisHealthIndicator extends HealthIndicator {
   }
 }
 
+@Injectable()
+export class PostgresHealthIndicator extends HealthIndicator {
+  constructor(private readonly prisma: PrismaService) {
+    super();
+  }
+
+  async isHealthy(key: string): Promise<HealthIndicatorResult> {
+    try {
+      // Lightweight query to verify DB connectivity
+      await this.prisma.$queryRaw`SELECT 1`;
+      return this.getStatus(key, true);
+    } catch (e) {
+      throw new HealthCheckError(
+        'Postgres check failed',
+        this.getStatus(key, false),
+      );
+    }
+  }
+}
+
 @Controller('health')
 export class HealthController {
   constructor(
     private readonly health: HealthCheckService,
     private readonly redisIndicator: RedisHealthIndicator,
+    private readonly postgresIndicator: PostgresHealthIndicator,
   ) {}
 
   @Get()
@@ -43,6 +64,7 @@ export class HealthController {
   async check() {
     const result = await this.health.check([
       () => this.redisIndicator.isHealthy('redis'),
+      () => this.postgresIndicator.isHealthy('postgres'),
     ]);
     return { ...result, service: 'gateway' };
   }
