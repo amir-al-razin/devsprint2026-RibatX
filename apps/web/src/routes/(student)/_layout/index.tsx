@@ -11,6 +11,14 @@ import { useOrderStatus } from '@/hooks/useOrderStatus'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 
 // ─── Step tracker ────────────────────────────────────────────────────────────
@@ -57,6 +65,14 @@ function OrderDashboard() {
   const [orderId, setOrderId] = useState<string | null>(null)
   const [placing, setPlacing] = useState(false)
   const [placed, setPlaced] = useState(false)
+  const [showItems, setShowItems] = useState(false)
+
+  // TODO: Integrate with real API for order items.
+  const mockItems = [
+    { id: '1', name: 'Iftar Box Standard', price: 0, quantity: 1 },
+    { id: '2', name: 'Dates (Pack of 3)', price: 0, quantity: 1 },
+    { id: '3', name: 'Apple Juice (Organic)', price: 0, quantity: 1 },
+  ]
 
   // Fetch actual item ID from stock service on mount (avoids stale env var)
   const [iftarBoxId, setIftarBoxId] = useState<string | null>(null)
@@ -244,6 +260,58 @@ function OrderDashboard() {
                 </p>
               ) : (
                 <>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-muted-foreground tabular-nums">
+                      ID: {orderId?.slice(0, 8)}...
+                    </span>
+                    <Dialog open={showItems} onOpenChange={setShowItems}>
+                      <DialogTrigger asChild>
+                        <Button
+                          variant="link"
+                          size="sm"
+                          className="h-auto p-0 text-xs text-primary/80 hover:text-primary transition-colors"
+                        >
+                          View Items
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-xs bg-card/98 border-border/40 sm:max-w-sm">
+                        <DialogHeader>
+                          <DialogTitle className="text-lg font-bold">
+                            Order Items
+                          </DialogTitle>
+                        </DialogHeader>
+                        <ScrollArea className="mt-4 max-h-[300px] pr-4">
+                          <div className="space-y-4">
+                            {mockItems.map((item) => (
+                              <div
+                                key={item.id}
+                                className="flex items-center justify-between py-2 border-b border-border/30 last:border-0"
+                              >
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="text-sm font-medium">
+                                    {item.name}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground">
+                                    Qty: {item.quantity}
+                                  </span>
+                                </div>
+                                <span className="text-sm font-semibold tabular-nums">
+                                  Free
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </ScrollArea>
+                        <div className="mt-6 pt-4 border-t border-border/40 flex items-center justify-between">
+                          <span className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+                            Total
+                          </span>
+                          <span className="text-lg font-bold">0.00 BDT</span>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+
                   <div className="h-1.5 w-full bg-secondary rounded-md overflow-hidden">
                     <motion.div
                       className="h-full bg-primary"

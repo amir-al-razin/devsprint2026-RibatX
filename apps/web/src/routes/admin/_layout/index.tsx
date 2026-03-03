@@ -36,6 +36,15 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 
 // ─── URL helpers ─────────────────────────────────────────────────────────────
@@ -1320,6 +1329,89 @@ function AdminDashboard() {
                     ))}
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          </section>
+
+          {/* Global Order History / Recent Transactions */}
+          <section>
+            <div className="flex items-center gap-2 mb-4">
+              <Clock size={18} className="text-primary" />
+              <h2 className="font-semibold text-foreground tracking-wide">
+                Recent Transactions
+              </h2>
+            </div>
+            <Card className="bg-card">
+              <CardContent className="p-0">
+                <ScrollArea className="h-[400px] w-full">
+                  <Table>
+                    <TableHeader className="bg-secondary/30 sticky top-0 z-10 backdrop-blur-sm">
+                      <TableRow className="hover:bg-transparent border-border/50">
+                        <TableHead className="w-[100px] py-4 font-semibold uppercase text-[10px] tracking-wider text-muted-foreground pl-6">
+                          ID
+                        </TableHead>
+                        <TableHead className="font-semibold uppercase text-[10px] tracking-wider text-muted-foreground">
+                          Student
+                        </TableHead>
+                        <TableHead className="font-semibold uppercase text-[10px] tracking-wider text-muted-foreground">
+                          Status
+                        </TableHead>
+                        <TableHead className="text-right font-semibold uppercase text-[10px] tracking-wider text-muted-foreground pr-6">
+                          At
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {kitchenRecent?.items?.length ? (
+                        kitchenRecent.items.map((item) => (
+                          <TableRow
+                            key={item.orderId}
+                            className="hover:bg-secondary/20 border-border/30 transition-colors"
+                          >
+                            <TableCell className="font-mono text-[11px] py-4 pl-6 text-muted-foreground">
+                              {item.orderId.slice(0, 8)}...
+                            </TableCell>
+                            <TableCell className="text-sm font-medium">
+                              {item.studentId || '—'}
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant="secondary"
+                                className={cn(
+                                  'uppercase text-[9px] px-2 py-0.5 font-bold',
+                                  item.state === 'active'
+                                    ? 'bg-primary/15 text-primary'
+                                    : 'bg-secondary text-muted-foreground',
+                                )}
+                              >
+                                {item.state}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right text-[11px] text-muted-foreground tabular-nums pr-6">
+                              {new Date(item.createdAt).toLocaleTimeString(
+                                'en-GB',
+                                {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                  second: '2-digit',
+                                },
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell
+                            colSpan={4}
+                            className="h-32 text-center text-sm text-muted-foreground"
+                          >
+                            No recent transactions found.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </ScrollArea>
               </CardContent>
             </Card>
           </section>
