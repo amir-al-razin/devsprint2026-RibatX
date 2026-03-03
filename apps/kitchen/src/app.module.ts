@@ -33,6 +33,9 @@ import { ChaosGuard } from './common/guards/chaos.guard';
     BullModule.registerQueue({
       name: 'kitchen-orders',
     }),
+    BullModule.registerQueue({
+      name: 'order-notifications',
+    }),
     TerminusModule,
     HealthModule,
     MetricsModule,

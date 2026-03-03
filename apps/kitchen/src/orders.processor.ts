@@ -1,32 +1,41 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { InjectQueue, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import { Logger } from '@nestjs/common';
-import axios from 'axios';
+import { Queue } from 'bullmq';
 
 @Processor('kitchen-orders')
 export class OrdersProcessor extends WorkerHost {
   private readonly logger = new Logger(OrdersProcessor.name);
 
+  constructor(
+    @InjectQueue('order-notifications')
+    private readonly notificationQueue: Queue,
+  ) {
+    super();
+  }
+
   async process(job: Job<any, any, string>): Promise<any> {
-    const { orderId, studentId, itemId, traceId } = job.data;
+    const { orderId, studentId, traceId } = job.data;
     this.logger.log(`Processing order ${orderId} for student ${studentId}...`);
 
-    const notificationUrl =
-      process.env.NOTIFICATION_SERVICE_URL || 'http://notification:3004';
-
-    // Step 1: notify IN_KITCHEN immediately
-    try {
-      await axios.patch(`${notificationUrl}/notify/${orderId}`, {
-        status: 'IN_KITCHEN',
+    // Step 1: enqueue IN_KITCHEN notification (durable + retryable)
+    await this.notificationQueue.add(
+      'notify-order',
+      {
+        orderId,
         studentId,
+        status: 'IN_KITCHEN',
         traceId,
-      });
-      this.logger.log(`Order ${orderId} marked IN_KITCHEN`);
-    } catch (error) {
-      this.logger.error(
-        `Failed to send IN_KITCHEN notification for order ${orderId}`,
-      );
-    }
+      },
+      {
+        jobId: `${orderId}:IN_KITCHEN`,
+        attempts: 5,
+        backoff: { type: 'exponential', delay: 500 },
+        removeOnComplete: true,
+        removeOnFail: false,
+      },
+    );
+    this.logger.log(`Enqueued IN_KITCHEN notification for order ${orderId}`);
 
     // Step 2: simulate cooking time (3–7 seconds)
     const cookingTime = Math.floor(Math.random() * 4000) + 3000;
@@ -34,18 +43,24 @@ export class OrdersProcessor extends WorkerHost {
 
     this.logger.log(`Order ${orderId} is READY!`);
 
-    // Step 3: notify READY
-    try {
-      await axios.patch(`${notificationUrl}/notify/${orderId}`, {
-        status: 'READY',
+    // Step 3: enqueue READY notification (durable + retryable)
+    await this.notificationQueue.add(
+      'notify-order',
+      {
+        orderId,
         studentId,
+        status: 'READY',
         traceId,
-      });
-    } catch (error) {
-      this.logger.error(
-        `Failed to send READY notification for order ${orderId}`,
-      );
-    }
+      },
+      {
+        jobId: `${orderId}:READY`,
+        attempts: 5,
+        backoff: { type: 'exponential', delay: 500 },
+        removeOnComplete: true,
+        removeOnFail: false,
+      },
+    );
+    this.logger.log(`Enqueued READY notification for order ${orderId}`);
 
     return { status: 'COMPLETED', orderId };
   }
