@@ -6,11 +6,17 @@ import { AxiosResponse } from 'axios';
 import { OrdersService } from './orders.service';
 import { getRedisConnectionToken } from '@nestjs-modules/ioredis';
 import { getQueueToken } from '@nestjs/bullmq';
+import { PrismaService } from '../prisma/prisma.service';
 
 describe('OrdersService', () => {
   let service: OrdersService;
   let httpService: { post: jest.Mock };
-  let redis: { get: jest.Mock; incr: jest.Mock };
+  let redis: {
+    get: jest.Mock;
+    incr: jest.Mock;
+    setex: jest.Mock;
+    set: jest.Mock;
+  };
   let kitchenQueue: { add: jest.Mock };
 
   beforeEach(async () => {
@@ -20,6 +26,7 @@ describe('OrdersService', () => {
       get: jest.fn().mockResolvedValue(null),
       incr: jest.fn().mockResolvedValue(1),
       setex: jest.fn().mockResolvedValue('OK'),
+      set: jest.fn().mockResolvedValue('OK'),
     };
     kitchenQueue = { add: jest.fn().mockResolvedValue({}) };
 
@@ -29,6 +36,10 @@ describe('OrdersService', () => {
         { provide: HttpService, useValue: httpService },
         { provide: getRedisConnectionToken(), useValue: redis },
         { provide: getQueueToken('kitchen-orders'), useValue: kitchenQueue },
+        {
+          provide: PrismaService,
+          useValue: { order: { create: jest.fn().mockResolvedValue({}) } },
+        },
       ],
     }).compile();
 

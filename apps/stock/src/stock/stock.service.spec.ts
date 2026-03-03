@@ -16,6 +16,7 @@ describe('StockService', () => {
       findFirst: jest.Mock;
       updateMany: jest.Mock;
     };
+    $transaction: jest.Mock;
   };
   let redis: { set: jest.Mock };
 
@@ -33,6 +34,17 @@ describe('StockService', () => {
         findFirst: jest.fn(),
         updateMany: jest.fn(),
       },
+      $transaction: jest
+        .fn()
+        .mockImplementation((cb: (tx: any) => any) =>
+          cb({
+            item: {
+              findUnique: prisma.item.findUnique,
+              findFirst: prisma.item.findFirst,
+              updateMany: prisma.item.updateMany,
+            },
+          }),
+        ),
     };
     redis = { set: jest.fn().mockResolvedValue('OK') };
 
