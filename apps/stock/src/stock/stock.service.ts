@@ -15,49 +15,64 @@ export class StockService {
   ) {}
 
   async reserve(itemId: string) {
-    let retries = 3;
-    while (retries > 0) {
-      const item = await this.prisma.item.findUnique({
-        where: { id: itemId },
-      });
+    const maxRetries = 3;
+    const baseDelayMs = 10;
+    const maxDelayMs = 200;
 
-      if (!item) {
-        throw new NotFoundException('Item not found');
-      }
-
-      if (item.quantity <= 0) {
-        throw new ConflictException('Out of stock');
-      }
-
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        const updated = await this.prisma.item.updateMany({
-          where: {
-            id: itemId,
-            version: item.version,
-            quantity: { gt: 0 },
-          },
-          data: {
-            quantity: item.quantity - 1,
-            version: item.version + 1,
-          },
+        const result = await this.prisma.$transaction(async (tx) => {
+          const item = await tx.item.findUnique({
+            where: { id: itemId },
+          });
+
+          if (!item) {
+            throw new NotFoundException('Item not found');
+          }
+
+          if (item.quantity <= 0) {
+            throw new ConflictException('Out of stock');
+          }
+
+          const updated = await tx.item.updateMany({
+            where: {
+              id: itemId,
+              version: item.version,
+              quantity: { gt: 0 },
+            },
+            data: {
+              quantity: item.quantity - 1,
+              version: item.version + 1,
+            },
+          });
+
+          if (updated.count === 0) {
+            // Version conflict — let outer retry logic handle it
+            return null;
+          }
+
+          return {
+            reserved: true,
+            remaining: item.quantity - 1,
+            itemId,
+          };
         });
 
-        if (updated.count === 0) {
-          retries--;
-          if (retries === 0) {
+        if (!result) {
+          if (attempt === maxRetries) {
             throw new ConflictException('Concurrency conflict, try again');
           }
+
+          const delay =
+            Math.min(maxDelayMs, baseDelayMs * 2 ** (attempt - 1)) / 2;
+          const jitter = Math.random() * delay;
+          await new Promise((resolve) => setTimeout(resolve, jitter));
           continue;
         }
 
-        // Cache write-back
-        await this.redis.set(`stock:${itemId}`, item.quantity - 1);
-
-        return {
-          reserved: true,
-          remaining: item.quantity - 1,
-          itemId,
-        };
+        // Cache write-back after successful transaction
+        await this.redis.set(`stock:${itemId}`, result.remaining);
+        return result;
       } catch (error) {
         // Re-throw intentional HTTP exceptions — don't count them as retryable
         if (
@@ -66,8 +81,15 @@ export class StockService {
         ) {
           throw error;
         }
-        retries--;
-        if (retries === 0) throw error;
+
+        if (attempt === maxRetries) {
+          throw error;
+        }
+
+        const delay =
+          Math.min(maxDelayMs, baseDelayMs * 2 ** (attempt - 1)) / 2;
+        const jitter = Math.random() * delay;
+        await new Promise((resolve) => setTimeout(resolve, jitter));
       }
     }
   }
@@ -81,37 +103,54 @@ export class StockService {
       throw new NotFoundException('No item found');
     }
 
-    let retries = 3;
-    while (retries > 0) {
+    const maxRetries = 3;
+    const baseDelayMs = 10;
+    const maxDelayMs = 200;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        const updated = await this.prisma.item.updateMany({
-          where: {
-            id: item.id,
-            version: item.version,
-          },
-          data: {
-            quantity,
-            version: item.version + 1,
-          },
+        const result = await this.prisma.$transaction(async (tx) => {
+          const updated = await tx.item.updateMany({
+            where: {
+              id: item.id,
+              version: item.version,
+            },
+            data: {
+              quantity,
+              version: item.version + 1,
+            },
+          });
+
+          if (updated.count === 0) {
+            return null;
+          }
+
+          return { id: item.id, name: item.name, quantity };
         });
 
-        if (updated.count === 0) {
-          // Version conflict — re-read to get the latest version and retry
-          retries--;
-          if (retries === 0) {
+        if (!result) {
+          if (attempt === maxRetries) {
             throw new ConflictException('Concurrency conflict, try again');
           }
+
           const fresh = await this.prisma.item.findFirst({
             where: { name: 'Iftar Box' },
           });
-          if (!fresh) throw new NotFoundException('No item found');
+          if (!fresh) {
+            throw new NotFoundException('No item found');
+          }
           item = fresh;
+
+          const delay =
+            Math.min(maxDelayMs, baseDelayMs * 2 ** (attempt - 1)) / 2;
+          const jitter = Math.random() * delay;
+          await new Promise((resolve) => setTimeout(resolve, jitter));
           continue;
         }
 
         // Invalidate Redis cache so gateway picks up new quantity immediately
         await this.redis.set(`stock:${item.id}`, quantity);
-        return { id: item.id, name: item.name, quantity };
+        return result;
       } catch (error) {
         if (
           error instanceof ConflictException ||
@@ -119,8 +158,15 @@ export class StockService {
         ) {
           throw error;
         }
-        retries--;
-        if (retries === 0) throw error;
+
+        if (attempt === maxRetries) {
+          throw error;
+        }
+
+        const delay =
+          Math.min(maxDelayMs, baseDelayMs * 2 ** (attempt - 1)) / 2;
+        const jitter = Math.random() * delay;
+        await new Promise((resolve) => setTimeout(resolve, jitter));
       }
     }
   }

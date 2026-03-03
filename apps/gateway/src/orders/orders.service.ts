@@ -13,6 +13,7 @@ import { firstValueFrom } from 'rxjs';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { v4 as uuidv4 } from 'uuid';
+import { PrismaService } from '../prisma/prisma.service';
 
 interface OrderTimelineEntry {
   status: string;
@@ -38,6 +39,7 @@ export class OrdersService {
     private readonly httpService: HttpService,
     @InjectRedis() private redis: Redis,
     @InjectQueue('kitchen-orders') private kitchenQueue: Queue,
+    private readonly prisma: PrismaService,
   ) {}
 
   private readonly internalApiKey = process.env.INTERNAL_API_KEY;
@@ -102,21 +104,16 @@ export class OrdersService {
         itemId,
       });
 
-      const orderResult = {
-        orderId,
-        status: 'STOCK_VERIFIED',
-        message: 'Order received and sent to kitchen',
-      };
-
-      // 5. Persist order in Redis so GET /orders/:id can look it up
       const verifiedAt = new Date().toISOString();
-      const orderPayload = {
+
+      const orderPayload: OrderPayload = {
         orderId,
         traceId,
         status: 'STOCK_VERIFIED',
         studentId,
         itemId,
-        createdAt: new Date().toISOString(),
+        createdAt: pendingAt,
+        updatedAt: verifiedAt,
         timeline: [
           {
             status: 'PENDING',
@@ -132,13 +129,35 @@ export class OrdersService {
           },
         ],
       };
+
+      // 5. Persist order durably in Postgres (source of truth)
+      await this.prisma.order.create({
+        data: {
+          id: orderId,
+          traceId,
+          status: orderPayload.status,
+          studentId: orderPayload.studentId,
+          itemId: orderPayload.itemId,
+          createdAt: new Date(orderPayload.createdAt),
+          updatedAt: new Date(orderPayload.updatedAt),
+          timeline: orderPayload.timeline,
+        },
+      });
+
+      // 6. Write-through to Redis so GET /orders/:id can read quickly
       await this.redis.setex(
         `order:${orderId}`,
         86400,
         JSON.stringify(orderPayload),
       );
 
-      // 6. Overwrite the idempotency key with the real result so retries get
+      const orderResult = {
+        orderId,
+        status: orderPayload.status,
+        message: 'Order received and sent to kitchen',
+      };
+
+      // 7. Overwrite the idempotency key with the real result so retries get
       //    the correct orderId instead of the PROCESSING placeholder
       if (idempotencyKey) {
         await this.redis.set(
@@ -167,20 +186,40 @@ export class OrdersService {
   }
 
   async getOrder(orderId: string) {
-    const raw = await this.redis.get(`order:${orderId}`);
-    if (!raw) {
+    // First try Redis (read-through cache)
+    const cached = await this.redis.get(`order:${orderId}`);
+    if (cached) {
+      return JSON.parse(cached) as OrderPayload;
+    }
+
+    // Fall back to Postgres as the source of truth
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+    });
+
+    if (!order) {
       throw new NotFoundException(`Order ${orderId} not found`);
     }
-    return JSON.parse(raw) as OrderPayload;
+
+    const payload: OrderPayload = {
+      orderId: order.id,
+      traceId: order.traceId,
+      status: order.status,
+      studentId: order.studentId,
+      itemId: order.itemId,
+      createdAt: order.createdAt.toISOString(),
+      updatedAt: order.updatedAt?.toISOString(),
+      timeline: (order.timeline as OrderTimelineEntry[]) ?? [],
+    };
+
+    // Populate Redis cache for subsequent reads
+    await this.redis.setex(`order:${orderId}`, 86400, JSON.stringify(payload));
+
+    return payload;
   }
 
   async getOrderTimeline(orderId: string) {
-    const raw = await this.redis.get(`order:${orderId}`);
-    if (!raw) {
-      throw new NotFoundException(`Order ${orderId} not found`);
-    }
-
-    const order = JSON.parse(raw) as OrderPayload;
+    const order = await this.getOrder(orderId);
 
     return {
       orderId: order.orderId,
@@ -195,37 +234,51 @@ export class OrdersService {
     source: string,
     traceId?: string,
   ) {
-    const raw = await this.redis.get(`order:${orderId}`);
-    if (!raw) {
+    const now = new Date().toISOString();
+
+    const existing = await this.prisma.order.findUnique({
+      where: { id: orderId },
+    });
+
+    if (!existing) {
       throw new NotFoundException(`Order ${orderId} not found`);
     }
 
-    const now = new Date().toISOString();
-    const order = JSON.parse(raw) as OrderPayload;
+    const timeline = Array.isArray(existing.timeline)
+      ? (existing.timeline as OrderTimelineEntry[])
+      : [];
 
-    const timeline = Array.isArray(order.timeline) ? order.timeline : [];
     const last = timeline[timeline.length - 1];
     if (last?.status !== status) {
       timeline.push({
         status,
         at: now,
         source,
-        traceId: traceId ?? order.traceId,
+        traceId: traceId ?? existing.traceId,
       });
     }
 
-    const nextOrder = {
-      ...order,
-      status,
-      updatedAt: now,
-      timeline,
+    const updated = await this.prisma.order.update({
+      where: { id: orderId },
+      data: {
+        status,
+        updatedAt: new Date(now),
+        timeline,
+      },
+    });
+
+    const payload: OrderPayload = {
+      orderId: updated.id,
+      traceId: updated.traceId,
+      status: updated.status,
+      studentId: updated.studentId,
+      itemId: updated.itemId,
+      createdAt: updated.createdAt.toISOString(),
+      updatedAt: updated.updatedAt?.toISOString(),
+      timeline: (updated.timeline as OrderTimelineEntry[]) ?? [],
     };
 
-    await this.redis.setex(
-      `order:${orderId}`,
-      86400,
-      JSON.stringify(nextOrder),
-    );
+    await this.redis.setex(`order:${orderId}`, 86400, JSON.stringify(payload));
 
     return {
       orderId,
