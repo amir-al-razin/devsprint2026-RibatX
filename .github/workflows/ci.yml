@@ -31,8 +31,7 @@ jobs:
         run: pnpm turbo build --filter="./packages/*"
 
       - name: Lint all services
-        run: pnpm turbo lint
-        continue-on-error: true  # Don't block on lint warnings initially
+        run: pnpm turbo lint -- --max-warnings 0
 
       - name: Build all services
         run: pnpm turbo build

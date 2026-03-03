@@ -12,6 +12,25 @@ import { firstValueFrom } from 'rxjs';
 
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
+import { v4 as uuidv4 } from 'uuid';
+
+interface OrderTimelineEntry {
+  status: string;
+  at: string;
+  source: string;
+  traceId?: string;
+}
+
+interface OrderPayload {
+  orderId: string;
+  traceId: string;
+  status: string;
+  studentId: string;
+  itemId: string;
+  createdAt: string;
+  updatedAt?: string;
+  timeline: OrderTimelineEntry[];
+}
 
 @Injectable()
 export class OrdersService {
@@ -72,10 +91,8 @@ export class OrdersService {
         this.httpService.post(`${stockUrl}/stock/reserve`, { itemId }),
       );
 
-      const orderId = `ORD-${Date.now()}`;
-      const traceId = `TRC-${Date.now()}-${Math.random()
-        .toString(36)
-        .slice(2, 8)}`;
+      const orderId = `ORD-${uuidv4()}`;
+      const traceId = `TRC-${uuidv4()}`;
 
       // 4. HAND OFF TO KITCHEN QUEUE (Day 2/3 Feature)
       await this.kitchenQueue.add('cook-order', {
@@ -154,7 +171,7 @@ export class OrdersService {
     if (!raw) {
       throw new NotFoundException(`Order ${orderId} not found`);
     }
-    return JSON.parse(raw);
+    return JSON.parse(raw) as OrderPayload;
   }
 
   async getOrderTimeline(orderId: string) {
@@ -163,17 +180,7 @@ export class OrdersService {
       throw new NotFoundException(`Order ${orderId} not found`);
     }
 
-    const order = JSON.parse(raw) as {
-      orderId: string;
-      status: string;
-      traceId?: string;
-      timeline?: Array<{
-        status: string;
-        at: string;
-        source: string;
-        traceId?: string;
-      }>;
-    };
+    const order = JSON.parse(raw) as OrderPayload;
 
     return {
       orderId: order.orderId,
@@ -194,17 +201,7 @@ export class OrdersService {
     }
 
     const now = new Date().toISOString();
-    const order = JSON.parse(raw) as {
-      orderId: string;
-      status: string;
-      traceId?: string;
-      timeline?: Array<{
-        status: string;
-        at: string;
-        source: string;
-        traceId?: string;
-      }>;
-    };
+    const order = JSON.parse(raw) as OrderPayload;
 
     const timeline = Array.isArray(order.timeline) ? order.timeline : [];
     const last = timeline[timeline.length - 1];

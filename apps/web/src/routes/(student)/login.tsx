@@ -16,9 +16,9 @@ import { Label } from '@/components/ui/label'
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
-  CardDescription,
 } from '@/components/ui/card'
 
 export const Route = createFileRoute('/(student)/login')({

@@ -1,7 +1,9 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, Logger } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { PrismaClient } from './generated/prisma';
+
+const logger = new Logger('Bootstrap');
 
 async function seedItems(prisma: PrismaClient) {
   // Remove any stale items that are not "Iftar Box" (leftover from earlier schema).
@@ -9,7 +11,7 @@ async function seedItems(prisma: PrismaClient) {
     where: { name: { not: 'Iftar Box' } },
   });
   if (stale.count > 0) {
-    console.log(`[stock] Removed ${stale.count} stale non-Iftar-Box item(s)`);
+    logger.log(`[stock] Removed ${stale.count} stale non-Iftar-Box item(s)`);
   }
 
   // Ensure there is exactly one "Iftar Box" item.
@@ -19,11 +21,11 @@ async function seedItems(prisma: PrismaClient) {
 
   if (existingItems.length === 0) {
     await prisma.item.create({ data: { name: 'Iftar Box', quantity: 100 } });
-    console.log('[stock] Initialised single Iftar Box item (qty: 100)');
+    logger.log('[stock] Initialised single Iftar Box item (qty: 100)');
   } else if (existingItems.length > 1) {
     await prisma.item.deleteMany({ where: { name: 'Iftar Box' } });
     await prisma.item.create({ data: { name: 'Iftar Box', quantity: 100 } });
-    console.log(
+    logger.log(
       '[stock] Normalised Iftar Box items to a single entry (qty: 100)',
     );
   }
@@ -35,14 +37,14 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe());
   const port = process.env.PORT ?? 3002;
   await app.listen(port);
-  console.log(`[stock] running on port ${port}`);
+  logger.log(`[stock] running on port ${port}`);
 
   // Seed default items if DB is empty
   const prisma = new PrismaClient();
   try {
     await seedItems(prisma);
   } catch (e) {
-    console.warn('[stock] Seed skipped:', e instanceof Error ? e.message : e);
+    logger.warn(`[stock] Seed skipped: ${e instanceof Error ? e.message : e}`);
   } finally {
     await prisma.$disconnect();
   }

@@ -4,10 +4,12 @@ import { OrdersService } from './orders.service';
 import { OrdersController } from './orders.controller';
 
 import { BullModule } from '@nestjs/bullmq';
+import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({
   imports: [
     HttpModule,
+    PrismaModule,
     BullModule.registerQueue({
       name: 'kitchen-orders',
     }),
