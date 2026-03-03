@@ -9,8 +9,8 @@ COPY apps/gateway/package.json ./apps/gateway/
 RUN pnpm install --frozen-lockfile
 COPY packages/ ./packages/
 COPY apps/gateway/ ./apps/gateway/
-WORKDIR /app/apps/gateway
-RUN pnpm build
+WORKDIR /app
+RUN pnpm --filter @ribatx/gateway build
 
 FROM node:20-alpine AS runner
 RUN corepack enable && corepack prepare pnpm@10 --activate
