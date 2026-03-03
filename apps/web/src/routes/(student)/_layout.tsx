@@ -9,8 +9,11 @@ import {
   getStudentId,
   getStudentName,
   clearToken,
+  isAdmin,
 } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
+import { LayoutDashboard } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 
 export const Route = createFileRoute('/(student)/_layout')({
@@ -53,15 +56,25 @@ function StudentLayout() {
         <span className="font-semibold text-sm tracking-wide">
           🍽️ IUT Cafeteria
         </span>
-        <div className="flex items-center gap-3">
-          {name && (
-            <span className="text-sm text-muted-foreground">
-              {name} <span className="text-xs opacity-50">({studentId})</span>
-            </span>
+        <div className="flex items-center gap-2">
+          {isAdmin(token!) && (
+            <Button variant="ghost" size="sm" asChild>
+              <Link to="/admin" className="flex items-center gap-2">
+                <LayoutDashboard size={14} />
+                <span>Dashboard</span>
+              </Link>
+            </Button>
           )}
-          <Button variant="ghost" size="sm" onClick={handleLogout}>
-            Sign out
-          </Button>
+          <div className="flex items-center gap-3 ml-1">
+            {name && (
+              <span className="text-sm text-muted-foreground mr-1">
+                {name} <span className="text-xs opacity-50">({studentId})</span>
+              </span>
+            )}
+            <Button variant="ghost" size="sm" onClick={handleLogout}>
+              Sign out
+            </Button>
+          </div>
         </div>
       </header>
       <main className="p-6">
