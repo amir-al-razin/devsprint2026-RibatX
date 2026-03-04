@@ -110,6 +110,9 @@ export class StockService {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const result = await this.prisma.$transaction(async (tx) => {
+          if (!item) {
+            throw new NotFoundException('Item not found in transaction');
+          }
           const updated = await tx.item.updateMany({
             where: {
               id: item.id,
@@ -125,6 +128,9 @@ export class StockService {
             return null;
           }
 
+          if (!item) {
+            throw new NotFoundException('Item not found at return');
+          }
           return { id: item.id, name: item.name, quantity };
         });
 

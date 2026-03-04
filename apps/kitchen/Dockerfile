@@ -1,20 +1,28 @@
 # syntax=docker/dockerfile:1
 FROM node:20-alpine AS builder
-RUN corepack enable && corepack prepare pnpm@10 --activate
+RUN corepack enable && corepack prepare pnpm@10.30.1 --activate
 WORKDIR /app
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
-COPY packages/types/package.json ./packages/types/
-COPY packages/tsconfig/package.json ./packages/tsconfig/
-COPY apps/kitchen/package.json ./apps/kitchen/
-RUN pnpm install --frozen-lockfile
+RUN printf '#!/bin/sh\nexit 0\n' > /usr/local/bin/husky && chmod +x /usr/local/bin/husky
+RUN pnpm config set fetch-retries 5 && \
+    pnpm config set fetch-retry-mintimeout 20000 && \
+    pnpm config set fetch-retry-maxtimeout 120000 && \
+    pnpm config set network-timeout 300000
+
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml .npmrc ./
 COPY packages/ ./packages/
-COPY apps/kitchen/ ./apps/kitchen/
-WORKDIR /app/apps/kitchen
-RUN pnpm build
+COPY apps/ ./apps/
+
+RUN pnpm install --frozen-lockfile
+
+RUN pnpm --filter @ribatx/kitchen build
 
 FROM node:20-alpine AS runner
-RUN corepack enable && corepack prepare pnpm@10 --activate
+RUN corepack enable && corepack prepare pnpm@10.30.1 --activate
 WORKDIR /app
+RUN pnpm config set fetch-retries 5 && \
+    pnpm config set fetch-retry-mintimeout 20000 && \
+    pnpm config set fetch-retry-maxtimeout 120000 && \
+    pnpm config set network-timeout 300000
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY packages/types/package.json ./packages/types/
 COPY packages/tsconfig/package.json ./packages/tsconfig/
@@ -22,6 +30,7 @@ COPY apps/kitchen/package.json ./apps/kitchen/
 RUN printf '#!/bin/sh\nexit 0\n' > /usr/local/bin/husky && chmod +x /usr/local/bin/husky
 RUN pnpm install --frozen-lockfile --prod
 COPY --from=builder /app/apps/kitchen/dist ./apps/kitchen/dist
+
 WORKDIR /app/apps/kitchen
 ENV NODE_ENV=production
 EXPOSE 3003

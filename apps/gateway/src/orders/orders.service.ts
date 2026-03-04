@@ -5,6 +5,7 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { HttpService } from '@nestjs/axios';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
@@ -15,14 +16,14 @@ import { Queue } from 'bullmq';
 import { v4 as uuidv4 } from 'uuid';
 import { PrismaService } from '../prisma/prisma.service';
 
-interface OrderTimelineEntry {
+export interface OrderTimelineEntry {
   status: string;
   at: string;
   source: string;
   traceId?: string;
 }
 
-interface OrderPayload {
+export interface OrderPayload {
   orderId: string;
   traceId: string;
   status: string;
@@ -139,8 +140,10 @@ export class OrdersService {
           studentId: orderPayload.studentId,
           itemId: orderPayload.itemId,
           createdAt: new Date(orderPayload.createdAt),
-          updatedAt: new Date(orderPayload.updatedAt),
-          timeline: orderPayload.timeline,
+          updatedAt: orderPayload.updatedAt
+            ? new Date(orderPayload.updatedAt)
+            : undefined,
+          timeline: orderPayload.timeline as any,
         },
       });
 
@@ -209,7 +212,7 @@ export class OrdersService {
       itemId: order.itemId,
       createdAt: order.createdAt.toISOString(),
       updatedAt: order.updatedAt?.toISOString(),
-      timeline: (order.timeline as OrderTimelineEntry[]) ?? [],
+      timeline: (order.timeline as unknown as OrderTimelineEntry[]) ?? [],
     };
 
     // Populate Redis cache for subsequent reads
@@ -245,7 +248,7 @@ export class OrdersService {
     }
 
     const timeline = Array.isArray(existing.timeline)
-      ? (existing.timeline as OrderTimelineEntry[])
+      ? (existing.timeline as unknown as OrderTimelineEntry[])
       : [];
 
     const last = timeline[timeline.length - 1];
@@ -263,7 +266,7 @@ export class OrdersService {
       data: {
         status,
         updatedAt: new Date(now),
-        timeline,
+        timeline: timeline as any,
       },
     });
 
@@ -275,7 +278,7 @@ export class OrdersService {
       itemId: updated.itemId,
       createdAt: updated.createdAt.toISOString(),
       updatedAt: updated.updatedAt?.toISOString(),
-      timeline: (updated.timeline as OrderTimelineEntry[]) ?? [],
+      timeline: (updated.timeline as unknown as OrderTimelineEntry[]) ?? [],
     };
 
     await this.redis.setex(`order:${orderId}`, 86400, JSON.stringify(payload));

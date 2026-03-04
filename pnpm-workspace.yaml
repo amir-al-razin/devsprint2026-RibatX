@@ -3,13 +3,15 @@ packages:
   - packages/*
 
 ignoredBuiltDependencies:
-  - '@nestjs/core'
-  - '@prisma/client'
-  - '@prisma/engines'
   - msgpackr-extract
   - msw
-  - prisma
   - unrs-resolver
 
 onlyBuiltDependencies:
   - esbuild
+  - '@prisma/client'
+  - '@prisma/engines'
+  - prisma
+  - vite
+  - vitest
+  - '@nestjs/cli'
