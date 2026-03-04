@@ -4,6 +4,9 @@
 
 RibatX is a production-grade ordering system built with NestJS, TanStack Start, and PostgreSQL. It addresses the challenges of manual cafeteria coordination by providing a seamless, automated flow from order placement to real-time status notifications.
 
+<img width="1901" height="960" alt="system-architecture" src="https://github.com/user-attachments/assets/5c89e5bb-3947-49a9-886b-1c17d380fd98" />
+
+
 ---
 
 ## 📖 Project Documentation
