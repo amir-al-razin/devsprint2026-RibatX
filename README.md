@@ -33,6 +33,22 @@ For a deep dive into the system's requirements, architecture, and technology cho
 
 ## 🛠️ Quick Start
 
+### credentials (admin)
+- id/name: admin001
+- pass: admin1234
+### creating user (admins are specified in .env by name/id after user creation)
+```bash
+curl -X POST https://identity-production-08d3.up.railway.app/auth/register \                                       
+  -H "Content-Type: application/json" \
+  -d '{"studentId":"2021331099","name":"New Student","password":"pass1234"}'
+```
+localhost
+```bash
+curl -X POST https://localhost:3001/auth/register \                                       
+  -H "Content-Type: application/json" \
+  -d '{"studentId":"2021331099","name":"New Student","password":"pass1234"}'
+```
+
 ### Prerequisites
 
 - Node.js ≥ 20
